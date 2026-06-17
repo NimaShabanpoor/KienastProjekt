@@ -1,0 +1,340 @@
+// SchulAdmin – Vollständiges Datenbankschema
+// Datenschutzkonform gemäss nDSG (Schweiz)
+// Alle persönlichen Daten werden per Soft Delete behandelt
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Rollen im System
+enum Role {
+  LEHRPERSON
+  ABTEILUNGSLEITUNG
+}
+
+// Absenzen-Status pro Lektion
+enum AbsenceStatus {
+  ANWESEND
+  ENTSCHULDIGT
+  UNENTSCHULDIGT
+}
+
+// Entität-Typen für den AuditLog
+enum AuditEntityType {
+  USER
+  STUDENT
+  CLASS
+  SUBJECT
+  LESSON
+  ABSENCE
+  GRADE
+  GRADE_CORRECTION
+  TIMETABLE_IMPORT
+}
+
+// ============================================================
+// BENUTZER (Lehrpersonen + Abteilungsleitung)
+// Soft Delete: deletedAt statt hartem Löschen
+// 2FA: totpSecret verschlüsselt gespeichert
+// ============================================================
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  role             Role
+  isActive         Boolean   @default(true)
+  totpSecret       String?   // Null bis 2FA eingerichtet (verschlüsselt)
+  totpEnabled      Boolean   @default(false)
+  backupCodes      String?   // JSON-Array gehashter Backup-Codes
+  refreshTokenHash String?   // SHA256 des aktuellen Refresh-Tokens
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime? // Soft Delete Timestamp
+
+  // Beziehungen
+  subjects         Subject[]         // Zugewiesene Fächer
+  absencesRecorded Absence[]         @relation("AbsenceRecordedBy")
+  gradesCreated    Grade[]           @relation("GradeCreatedBy")
+  gradeCorrections GradeCorrection[] @relation("CorrectionBy")
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ============================================================
+// KLASSEN (z.B. INF-2023-A, Semester, Schuljahr)
+// ============================================================
+model Class {
+  id         String   @id @default(cuid())
+  name       String
+  semester   Int      // 1 oder 2
+  schoolYear String   // z.B. "2024/25"
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Beziehungen
+  students   Student[]
+  subjects   Subject[]
+
+  @@unique([name, semester, schoolYear])
+  @@map("classes")
+}
+
+// ============================================================
+// SCHÜLER
+// NIEMALS hart löschen – Noten/Absenzen müssen nachvollziehbar bleiben
+// nDSG: Aufbewahrungspflicht beachten
+// ============================================================
+model Student {
+  id          String    @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String?   @unique
+  dateOfBirth DateTime?
+  gender      String?   // "M" | "F" | "D" – für Statistiken
+  classId     String
+  isActive    Boolean   @default(true)
+  deletedAt   DateTime? // Soft Delete – Noten/Absenzen bleiben einsehbar
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Beziehungen
+  class    Class     @relation(fields: [classId], references: [id])
+  absences Absence[]
+  grades   Grade[]
+
+  @@index([classId])
+  @@index([isActive])
+  @@map("students")
+}
+
+// ============================================================
+// FÄCHER
+// Einem Fach ist genau eine Lehrperson und eine Klasse zugewiesen
+// ============================================================
+model Subject {
+  id        String   @id @default(cuid())
+  name      String
+  classId   String
+  teacherId String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Beziehungen
+  class           Class           @relation(fields: [classId], references: [id])
+  teacher         User            @relation(fields: [teacherId], references: [id])
+  lessons         Lesson[]
+  grades          Grade[]
+  gradeCategories GradeCategory[]
+
+  @@index([classId])
+  @@index([teacherId])
+  @@map("subjects")
+}
+
+// ============================================================
+// LEKTIONEN (einzelne Unterrichtsstunden)
+// Konflikte werden im Service geprüft (Lehrperson, Raum)
+// ============================================================
+model Lesson {
+  id           String   @id @default(cuid())
+  subjectId    String
+  date         DateTime @db.Date
+  startTime    String   // "08:00" (HH:mm)
+  endTime      String   // "08:45" (HH:mm)
+  room         String?
+  isCancelled  Boolean  @default(false)
+  cancelReason String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Beziehungen
+  subject  Subject   @relation(fields: [subjectId], references: [id])
+  absences Absence[]
+
+  @@index([subjectId])
+  @@index([date])
+  @@map("lessons")
+}
+
+// ============================================================
+// ABSENZEN (pro Schüler, pro Lektion)
+// Unique-Constraint: Nur eine Absenz pro Schüler/Lektion (Upsert)
+// ============================================================
+model Absence {
+  id           String        @id @default(cuid())
+  studentId    String
+  lessonId     String
+  status       AbsenceStatus @default(UNENTSCHULDIGT)
+  note         String?
+  recordedById String
+  recordedAt   DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Beziehungen
+  student    Student @relation(fields: [studentId], references: [id])
+  lesson     Lesson  @relation(fields: [lessonId], references: [id])
+  recordedBy User    @relation("AbsenceRecordedBy", fields: [recordedById], references: [id])
+
+  @@unique([studentId, lessonId]) // Pro Schüler nur eine Absenz pro Lektion
+  @@index([studentId])
+  @@index([lessonId])
+  @@index([status])
+  @@map("absences")
+}
+
+// ============================================================
+// NOTENKATEGORIEN (konfigurierbar pro Fach)
+// Gewichtungen: Summe aller Kategorien pro Fach = 1.0
+// ============================================================
+model GradeCategory {
+  id        String  @id @default(cuid())
+  subjectId String
+  name      String  // z.B. "Prüfung", "Projekt", "Mündlich"
+  weight    Float   // 0.0 - 1.0
+
+  // Beziehungen
+  subject Subject @relation(fields: [subjectId], references: [id])
+  grades  Grade[]
+
+  @@index([subjectId])
+  @@map("grade_categories")
+}
+
+// ============================================================
+// NOTEN
+// Nach Eintragung gesperrt (isLocked=true)
+// Nur Abteilungsleitung kann per GradeCorrection ändern
+// ============================================================
+model Grade {
+  id          String    @id @default(cuid())
+  studentId   String
+  subjectId   String
+  categoryId  String
+  value       Float     // 1.0 - 6.0 (Schweizer Skala, 0.5er-Schritte)
+  description String?
+  date        DateTime  @db.Date
+  isLocked    Boolean   @default(false)
+  lockedAt    DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Beziehungen
+  student     Student         @relation(fields: [studentId], references: [id])
+  subject     Subject         @relation(fields: [subjectId], references: [id])
+  category    GradeCategory   @relation(fields: [categoryId], references: [id])
+  createdBy   User            @relation("GradeCreatedBy", fields: [createdById], references: [id])
+  corrections GradeCorrection[]
+
+  @@index([studentId])
+  @@index([subjectId])
+  @@index([isLocked])
+  @@map("grades")
+}
+
+// ============================================================
+// NOTENKORREKTUREN – vollständiges Protokoll
+// AuditLog: GRADE_CORRECTED wird zusätzlich gesetzt
+// ============================================================
+model GradeCorrection {
+  id            String   @id @default(cuid())
+  gradeId       String
+  oldValue      Float
+  newValue      Float
+  reason        String   // Pflichtfeld – Begründung
+  correctedById String
+  correctedAt   DateTime @default(now())
+
+  // Beziehungen
+  grade       Grade @relation(fields: [gradeId], references: [id])
+  correctedBy User  @relation("CorrectionBy", fields: [correctedById], references: [id])
+
+  @@index([gradeId])
+  @@map("grade_corrections")
+}
+
+// ============================================================
+// PROMOTIONSREGELN (konfigurierbar pro Klasse/Schuljahr)
+// ============================================================
+model PromotionRule {
+  id          String  @id @default(cuid())
+  classId     String
+  schoolYear  String
+  minAverage  Float   // z.B. 4.0
+  maxFailing  Int     // z.B. 1 = max. 1 Fach unter 4.0
+  description String?
+
+  @@unique([classId, schoolYear])
+  @@map("promotion_rules")
+}
+
+// ============================================================
+// KONFIGURATION (globale Einstellungen, z.B. Absenzen-Schwellenwert)
+// ============================================================
+model Config {
+  key         String   @id
+  value       String   // JSON-String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("config")
+}
+
+// ============================================================
+// BENACHRICHTIGUNGEN
+// ============================================================
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  type       String   // "ABSENCE_THRESHOLD" | "GRADE_CORRECTION_REQUEST"
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  entityType String?
+  entityId   String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ============================================================
+// AUDIT-LOG – unveränderliches Protokoll aller kritischen Aktionen
+// nDSG-Pflicht: Nachvollziehbarkeit gewährleisten
+// Darf NIEMALS gelöscht werden
+// ============================================================
+model AuditLog {
+  id         String          @id @default(cuid())
+  userId     String
+  action     String          // z.B. "GRADE_CORRECTED", "STUDENT_DEACTIVATED"
+  entityType AuditEntityType
+  entityId   String
+  oldValue   String?         // JSON-Snapshot vorher
+  newValue   String?         // JSON-Snapshot nachher
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
