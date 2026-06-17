@@ -1,0 +1,19 @@
+# Entwicklungs-Dockerfile für das Backend
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Abhängigkeiten zuerst (besseres Layer-Caching)
+COPY package*.json ./
+RUN npm install
+
+# Prisma-Schema für Client-Generierung
+COPY prisma ./prisma/
+RUN npx prisma generate
+
+COPY . .
+
+EXPOSE 3001
+
+# ts-node-dev startet den Server mit Hot-Reload
+CMD ["npx", "ts-node-dev", "--respawn", "--transpile-only", "src/app.ts"]
