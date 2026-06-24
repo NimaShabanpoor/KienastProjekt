@@ -6,23 +6,32 @@ import { z } from 'zod';
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // Lektion erstellen
-export const CreateLessonSchema = z
-  .object({
-    subjectId: z.string().cuid('Ungültige Fach-ID'),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss im Format YYYY-MM-DD sein'),
-    startTime: z.string().regex(timeRegex, 'Startzeit muss im Format HH:mm sein'),
-    endTime: z.string().regex(timeRegex, 'Endzeit muss im Format HH:mm sein'),
-    room: z.string().max(50).optional().nullable(),
-  })
-  .refine((data) => data.startTime < data.endTime, {
+const LessonBaseSchema = z.object({
+  subjectId: z.string().cuid('Ungültige Fach-ID'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss im Format YYYY-MM-DD sein'),
+  startTime: z.string().regex(timeRegex, 'Startzeit muss im Format HH:mm sein'),
+  endTime: z.string().regex(timeRegex, 'Endzeit muss im Format HH:mm sein'),
+  room: z.string().max(50).optional().nullable(),
+});
+
+export const CreateLessonSchema = LessonBaseSchema.refine(
+  (data) => data.startTime < data.endTime,
+  {
     message: 'Startzeit muss vor der Endzeit liegen',
     path: ['endTime'],
-  });
+  }
+);
 
 export type CreateLessonInput = z.infer<typeof CreateLessonSchema>;
 
 // Lektion aktualisieren
-export const UpdateLessonSchema = CreateLessonSchema.partial();
+export const UpdateLessonSchema = LessonBaseSchema.partial().refine(
+  (data) => !data.startTime || !data.endTime || data.startTime < data.endTime,
+  {
+    message: 'Startzeit muss vor der Endzeit liegen',
+    path: ['endTime'],
+  }
+);
 
 export type UpdateLessonInput = z.infer<typeof UpdateLessonSchema>;
 
