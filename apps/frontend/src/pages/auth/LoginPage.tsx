@@ -129,7 +129,12 @@ export default function LoginPage() {
         </div>
 
         {/* Datenschutz-Hinweis */}
-        <p className="text-center text-xs text-neutral-400 mt-6">
+        {import.meta.env.DEV && (
+          <p className="text-center text-xs text-neutral-500 mt-4">
+            Dev-Login: admin@itbenedickt.ch / Schuladmin1234!
+          </p>
+        )}
+        <p className="text-center text-xs text-neutral-400 mt-2">
           Dieses System verarbeitet personenbezogene Daten gemäss nDSG.
         </p>
       </div>

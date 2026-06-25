@@ -3,7 +3,10 @@
 import { z } from 'zod';
 
 export const LoginBodySchema = z.object({
-  email: z.string().email('Ungültige E-Mail-Adresse'),
+  email: z
+    .string()
+    .email('Ungültige E-Mail-Adresse')
+    .transform((value) => value.trim().toLowerCase()),
   password: z.string().min(1, 'Passwort erforderlich'),
 });
 
