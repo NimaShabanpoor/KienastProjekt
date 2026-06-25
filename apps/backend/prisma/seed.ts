@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   // --------------------------------------------------------
   // Fächer und Notenkategorien erstellen
   // --------------------------------------------------------
-  const matheFach = await prisma.subject.create({
+  await prisma.subject.create({
     data: {
       name: 'Mathematik',
       classId: klasse1.id,
