@@ -1,0 +1,16 @@
+{
+  "name": "schuladmin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SchulAdmin – Monorepo",
+  "workspaces": [
+    "apps/frontend",
+    "apps/backend",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev -w @schuladmin/frontend",
+    "dev:backend": "npm run dev -w @schuladmin/backend",
+    "build": "npm run build -w @schuladmin/shared && npm run build -w @schuladmin/backend && npm run build -w @schuladmin/frontend"
+  }
+}
