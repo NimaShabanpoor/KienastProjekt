@@ -3,6 +3,7 @@
 
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { env } from '../../config/env';
 import * as authController from './auth.controller';
 import { authMiddleware } from '../../middleware/auth.middleware';
 import { validateMiddleware } from '../../middleware/validate.middleware';
@@ -14,10 +15,10 @@ import {
 
 const router = Router();
 
-// Login-Rate-Limiter: max. 5 Versuche pro 15 Minuten pro IP
+// Login-Rate-Limiter: in Entwicklung großzügiger, in Produktion streng
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: env.NODE_ENV === 'development' ? 100 : 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

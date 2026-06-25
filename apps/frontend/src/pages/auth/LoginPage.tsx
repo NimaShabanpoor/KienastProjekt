@@ -4,6 +4,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import axios from 'axios';
 import { useLogin } from '../../hooks/useAuth';
 import { Loader2, LogIn } from 'lucide-react';
 
@@ -13,6 +14,17 @@ const loginSchema = z.object({
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
+
+function getLoginErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    if (error.response?.status === 429) {
+      return 'Zu viele Anmeldeversuche. Bitte kurz warten und es erneut versuchen.';
+    }
+    const apiError = error.response?.data as { error?: string } | undefined;
+    if (apiError?.error) return apiError.error;
+  }
+  return 'Ungültige Anmeldedaten. Bitte überprüfe E-Mail und Passwort.';
+}
 
 export default function LoginPage() {
   const loginMutation = useLogin();
@@ -90,7 +102,7 @@ export default function LoginPage() {
             {loginMutation.isError && (
               <div className="bg-brand-red-light border border-brand-red rounded-lg p-3">
                 <p className="text-brand-red-dark text-sm">
-                  Ungültige Anmeldedaten. Bitte überprüfe E-Mail und Passwort.
+                  {getLoginErrorMessage(loginMutation.error)}
                 </p>
               </div>
             )}
