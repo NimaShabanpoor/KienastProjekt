@@ -5,8 +5,7 @@
   "description": "SchulAdmin – Monorepo",
   "scripts": {
     "install:all": "npm install --prefix packages/shared && npm install --prefix apps/frontend && npm install --prefix apps/backend",
-    "dev:frontend": "npm run dev --prefix apps/frontend",
-    "dev:backend": "npm run dev --prefix apps/backend",
+    "dev": "npm run prisma:generate --prefix apps/backend && npx concurrently -k -n frontend,backend -c blue,green \"npm run dev --prefix apps/frontend\" \"npm run dev --prefix apps/backend\"",
     "build": "npm run build --prefix packages/shared && npm run build --prefix apps/backend && npm run build --prefix apps/frontend"
   }
 }

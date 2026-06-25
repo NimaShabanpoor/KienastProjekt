@@ -1,7 +1,12 @@
 // Zod-validierte Umgebungsvariablen
 // Fehler beim Start wenn Pflichtfelder fehlen – kein Silent-Fail
 
+import dotenv from 'dotenv';
+import path from 'path';
 import { z } from 'zod';
+
+// .env aus dem Projektroot laden (für lokales npm run dev)
+dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 
 const EnvSchema = z.object({
   // Datenbank
