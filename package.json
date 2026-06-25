@@ -3,14 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "description": "SchulAdmin – Monorepo",
-  "workspaces": [
-    "apps/frontend",
-    "apps/backend",
-    "packages/shared"
-  ],
   "scripts": {
-    "dev:frontend": "npm run dev -w @schuladmin/frontend",
-    "dev:backend": "npm run dev -w @schuladmin/backend",
-    "build": "npm run build -w @schuladmin/shared && npm run build -w @schuladmin/backend && npm run build -w @schuladmin/frontend"
+    "install:all": "npm install --prefix packages/shared && npm install --prefix apps/frontend && npm install --prefix apps/backend",
+    "dev:frontend": "npm run dev --prefix apps/frontend",
+    "dev:backend": "npm run dev --prefix apps/backend",
+    "build": "npm run build --prefix packages/shared && npm run build --prefix apps/backend && npm run build --prefix apps/frontend"
   }
 }
