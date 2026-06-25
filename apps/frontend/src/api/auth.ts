@@ -57,4 +57,12 @@ export const authApi = {
     const { data } = await apiClient.get<{ data: LoginResponse['user'] }>('/api/v1/auth/me');
     return data.data;
   },
+
+  refresh: async () => {
+    const { data } = await apiClient.post<{ data: { accessToken: string } }>(
+      '/api/v1/auth/refresh',
+      {}
+    );
+    return data.data;
+  },
 };

@@ -42,11 +42,8 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'schuladmin-auth',
-      // Nur nicht-sensible Daten persistieren
       partialize: (state) => ({
         user: state.user,
-        isAuthenticated: state.isAuthenticated,
-        // Access Token NICHT persistieren (nur im Memory halten)
       }),
     }
   )

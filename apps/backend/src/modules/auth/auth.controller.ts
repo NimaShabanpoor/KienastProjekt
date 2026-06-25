@@ -7,11 +7,11 @@ import { env } from '../../config/env';
 
 // Cookie-Optionen für Refresh-Token
 const REFRESH_COOKIE_OPTIONS = {
-  httpOnly: true,                              // Kein JavaScript-Zugriff
-  secure: env.NODE_ENV === 'production',       // Nur HTTPS in Produktion
-  sameSite: 'strict' as const,                // CSRF-Schutz
-  maxAge: 7 * 24 * 60 * 60 * 1000,           // 7 Tage in Millisekunden
-  path: '/api/v1/auth',                       // Nur für Auth-Endpunkte
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: env.NODE_ENV === 'development' ? ('lax' as const) : ('strict' as const),
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/api/v1/auth',
 };
 
 // POST /api/v1/auth/login

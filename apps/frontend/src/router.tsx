@@ -28,9 +28,9 @@ function ProtectedRoute({
   children: ReactNode;
   requiredRole?: Role;
 }) {
-  const { isAuthenticated, user } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
 
-  if (!isAuthenticated) {
+  if (!accessToken) {
     return <Navigate to="/login" replace />;
   }
 

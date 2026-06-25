@@ -5,12 +5,20 @@ import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env['VITE_API_URL'] ?? 'http://localhost:3001',
+  // Im Dev-Modus Vite-Proxy nutzen (gleiche Origin → Cookies funktionieren)
+  baseURL: import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? '' : 'http://localhost:3001'),
   withCredentials: true, // httpOnly Cookie für Refresh-Token senden
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+const AUTH_PATHS = ['/api/v1/auth/login', '/api/v1/auth/2fa/verify', '/api/v1/auth/refresh'];
+
+function isAuthRequest(url: string | undefined): boolean {
+  if (!url) return false;
+  return AUTH_PATHS.some((path) => url.includes(path));
+}
 
 // Request-Interceptor: Access Token zum Header hinzufügen
 apiClient.interceptors.request.use(
@@ -37,8 +45,13 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
     const status = error.response?.status;
 
-    // 401 und noch kein Retry-Versuch
-    if (status === 401 && originalRequest && !originalRequest.headers['_retry']) {
+    // Kein Token-Refresh bei Login/2FA – sonst 401-Kaskade in der Konsole
+    if (
+      status === 401 &&
+      originalRequest &&
+      !originalRequest.headers['_retry'] &&
+      !isAuthRequest(originalRequest.url)
+    ) {
       if (isRefreshing) {
         // Auf den laufenden Refresh warten
         return new Promise((resolve) => {
@@ -55,10 +68,9 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const { data } = await axios.post<{ data: { accessToken: string } }>(
+        const { data } = await apiClient.post<{ data: { accessToken: string } }>(
           '/api/v1/auth/refresh',
-          {},
-          { withCredentials: true }
+          {}
         );
 
         const newToken = data.data.accessToken;
