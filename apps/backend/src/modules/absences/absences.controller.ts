@@ -57,3 +57,27 @@ export const getAlerts = async (_req: Request, res: Response, next: NextFunction
     res.json({ data: alerts });
   } catch (err) { next(err); }
 };
+
+export const uploadMedicalCertificate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const id = req.params['id'] ?? '';
+    const hasMedicalCertificate = req.body.hasMedicalCertificate === 'true' || req.body.hasMedicalCertificate === true;
+    const absence = await absencesService.recordMedicalCertificate(
+      id,
+      hasMedicalCertificate,
+      req.file,
+      req.user!.role
+    );
+    req.auditEntityId = id;
+    req.auditNewValue = { hasMedicalCertificate, fileName: req.file?.originalname ?? null };
+    res.json({ data: absence });
+  } catch (err) { next(err); }
+};
+
+export const downloadMedicalCertificate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const id = req.params['id'] ?? '';
+    const { filePath, fileName } = await absencesService.getMedicalCertificateFile(id, req.user!.role);
+    res.download(filePath, fileName);
+  } catch (err) { next(err); }
+};

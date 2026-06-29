@@ -6,7 +6,11 @@
 // - Upsert: bestehende Absenz wird aktualisiert
 
 import { AbsenceStatus, Role } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
+import type { File } from 'multer';
 import { prisma } from '../../config/database';
+import { getMedicalCertificateDir } from '../../config/upload';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { logger } from '../../config/logger';
 import { assertTeacherHasClassAccess } from '../../utils/teacherAccess';
@@ -63,6 +67,30 @@ function sanitizeTeacherAbsenceEntry(entry: AbsenceEntry): AbsenceEntry {
   }
   // Abwesend → automatisch unentschuldigt bis der Leiter entschuldigt
   return { ...entry, status: AbsenceStatus.UNENTSCHULDIGT };
+}
+
+function validateTestExcuse(absence: {
+  lesson: { isTest: boolean };
+  hasMedicalCertificate: boolean | null;
+  medicalCertificatePath: string | null;
+}, targetStatus: AbsenceStatus): void {
+  if (!absence.lesson.isTest || targetStatus !== AbsenceStatus.ENTSCHULDIGT) return;
+
+  if (absence.hasMedicalCertificate === null) {
+    throw new ApiError(
+      'Bei Test-Tagen muss zuerst erfasst werden, ob ein Arztzeugnis vorliegt.',
+      'MEDICAL_CERTIFICATE_REQUIRED',
+      400
+    );
+  }
+
+  if (absence.hasMedicalCertificate && !absence.medicalCertificatePath) {
+    throw new ApiError(
+      'Bei vorhandenem Arztzeugnis muss der Scan hochgeladen werden.',
+      'MEDICAL_CERTIFICATE_FILE_REQUIRED',
+      400
+    );
+  }
 }
 
 export async function createAbsenceBatch(
@@ -126,10 +154,88 @@ export async function updateAbsence(
     );
   }
 
+  validateTestExcuse(absence, status);
+
   return prisma.absence.update({
     where: { id },
     data: { status, note: note ?? null },
   });
+}
+
+export async function recordMedicalCertificate(
+  absenceId: string,
+  hasMedicalCertificate: boolean,
+  file: File | undefined,
+  role: Role
+) {
+  if (role !== Role.ABTEILUNGSLEITUNG) {
+    throw new ApiError('Nur der Leiter kann Arztzeugnisse erfassen.', 'FORBIDDEN', 403);
+  }
+
+  const absence = await prisma.absence.findUnique({
+    where: { id: absenceId },
+    include: { lesson: true },
+  });
+
+  if (!absence) throw new ApiError('Absenz nicht gefunden.', 'ABSENCE_NOT_FOUND', 404);
+  if (!absence.lesson.isTest) {
+    throw new ApiError('Arztzeugnis wird nur bei Test-Lektionen erfasst.', 'NOT_A_TEST', 400);
+  }
+
+  if (hasMedicalCertificate && !file && !absence.medicalCertificatePath) {
+    throw new ApiError(
+      'Bitte den Scan des Arztzeugnisses hochladen.',
+      'MEDICAL_CERTIFICATE_FILE_REQUIRED',
+      400
+    );
+  }
+
+  if (!hasMedicalCertificate && absence.medicalCertificatePath) {
+    const oldPath = path.join(getMedicalCertificateDir(), absence.medicalCertificatePath);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  return prisma.absence.update({
+    where: { id: absenceId },
+    data: {
+      hasMedicalCertificate,
+      ...(hasMedicalCertificate && file
+        ? {
+            medicalCertificatePath: file.filename,
+            medicalCertificateFileName: file.originalname,
+            medicalCertificateUploadedAt: new Date(),
+          }
+        : {}),
+      ...(!hasMedicalCertificate
+        ? {
+            medicalCertificatePath: null,
+            medicalCertificateFileName: null,
+            medicalCertificateUploadedAt: null,
+          }
+        : {}),
+    },
+  });
+}
+
+export async function getMedicalCertificateFile(absenceId: string, role: Role) {
+  if (role !== Role.ABTEILUNGSLEITUNG) {
+    throw new ApiError('Keine Berechtigung.', 'FORBIDDEN', 403);
+  }
+
+  const absence = await prisma.absence.findUnique({ where: { id: absenceId } });
+  if (!absence?.medicalCertificatePath) {
+    throw new ApiError('Kein Arztzeugnis hinterlegt.', 'FILE_NOT_FOUND', 404);
+  }
+
+  const filePath = path.join(getMedicalCertificateDir(), absence.medicalCertificatePath);
+  if (!fs.existsSync(filePath)) {
+    throw new ApiError('Datei nicht gefunden.', 'FILE_NOT_FOUND', 404);
+  }
+
+  return {
+    filePath,
+    fileName: absence.medicalCertificateFileName ?? absence.medicalCertificatePath,
+  };
 }
 
 export async function listAbsences(params: {
@@ -162,12 +268,18 @@ export async function listAbsences(params: {
           date: true,
           startTime: true,
           endTime: true,
+          isTest: true,
           subject: { select: { name: true } },
         },
       },
       recordedBy: { select: { id: true, firstName: true, lastName: true } },
     },
-    orderBy: { lesson: { date: 'desc' } },
+    orderBy: [
+      { student: { class: { name: 'asc' } } },
+      { student: { lastName: 'asc' } },
+      { student: { firstName: 'asc' } },
+      { lesson: { date: 'desc' } },
+    ],
     take: 200,
   });
 }

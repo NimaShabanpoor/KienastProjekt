@@ -2,10 +2,13 @@
 
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { usePermissions } from '../hooks/usePermissions';
-import { ROLE_LABELS } from '@schuladmin/shared';
-import { LayoutDashboard, LogOut } from 'lucide-react';
+import { ROLE_LABELS, AbsenceStatus } from '@schuladmin/shared';
+import type { Absence } from '@schuladmin/shared';
+import { apiClient } from '../api/client';
+import { LayoutDashboard, LogOut, AlertCircle } from 'lucide-react';
 
 const LEADER_LINKS = [
   { href: '/', label: 'Dashboard' },
@@ -31,6 +34,20 @@ export default function AppShell() {
   const links = isLeader ? LEADER_LINKS : TEACHER_LINKS;
   const roleLabel = user?.role ? ROLE_LABELS[user.role] : '';
 
+  const { data: unexcusedCount } = useQuery({
+    queryKey: ['unexcused-absence-count'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: Absence[] }>(
+        `/api/v1/absences?status=${AbsenceStatus.UNENTSCHULDIGT}`
+      );
+      return data.data.length;
+    },
+    enabled: isLeader,
+    refetchInterval: 60_000,
+  });
+
+  const hasOpenAbsences = (unexcusedCount ?? 0) > 0;
+
   return (
     <div className="min-h-screen bg-neutral-50">
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-10">
@@ -44,13 +61,16 @@ export default function AppShell() {
               <Link
                 key={link.href}
                 to={link.href}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   location.pathname === link.href
                     ? 'bg-brand-red-light text-brand-red'
                     : 'text-neutral-600 hover:bg-neutral-100'
                 }`}
               >
                 {link.label}
+                {link.href === '/absences/excuse' && hasOpenAbsences && (
+                  <AlertCircle className="w-4 h-4 text-red-500" aria-label="Offene Absenzen" />
+                )}
               </Link>
             ))}
           </nav>
@@ -73,13 +93,16 @@ export default function AppShell() {
             <Link
               key={link.href}
               to={link.href}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
                 location.pathname === link.href
                   ? 'bg-brand-red-light text-brand-red'
                   : 'text-neutral-600 bg-white border border-neutral-200'
               }`}
             >
               {link.label}
+              {link.href === '/absences/excuse' && hasOpenAbsences && (
+                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+              )}
             </Link>
           ))}
         </nav>

@@ -13,7 +13,8 @@ interface CreateLessonInput {
   startTime: string;
   endTime: string;
   room?: string | null;
-  excludeLessonId?: string; // Für Updates: eigene Lektion ausschliessen
+  isTest?: boolean;
+  excludeLessonId?: string;
 }
 
 // --------------------------------------------------------
@@ -154,6 +155,7 @@ export async function createLesson(input: CreateLessonInput) {
       startTime: input.startTime,
       endTime: input.endTime,
       room: input.room ?? null,
+      isTest: input.isTest ?? false,
     },
     include: { subject: { select: { name: true } } },
   });
@@ -178,6 +180,7 @@ export async function updateLesson(id: string, input: Partial<CreateLessonInput>
     data: {
       ...input,
       date: input.date ? new Date(input.date) : undefined,
+      isTest: input.isTest,
     },
   });
 }

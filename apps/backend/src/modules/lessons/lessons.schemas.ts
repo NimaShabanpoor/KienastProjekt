@@ -10,6 +10,7 @@ const LessonBaseSchema = z.object({
   startTime: z.string().regex(timeRegex, 'Startzeit muss HH:mm sein'),
   endTime: z.string().regex(timeRegex, 'Endzeit muss HH:mm sein'),
   room: z.string().max(50).optional().nullable(),
+  isTest: z.coerce.boolean().optional().default(false),
 });
 
 export const CreateLessonBodySchema = LessonBaseSchema.refine(

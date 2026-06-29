@@ -69,6 +69,7 @@ export interface Lesson {
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   room: string | null;
+  isTest: boolean;
   isCancelled: boolean;
   cancelReason: string | null;
   createdAt: string;
@@ -83,13 +84,17 @@ export interface Absence {
   lessonId: string;
   status: AbsenceStatus;
   note: string | null;
+  hasMedicalCertificate: boolean | null;
+  medicalCertificatePath: string | null;
+  medicalCertificateFileName: string | null;
+  medicalCertificateUploadedAt: string | null;
   recordedById: string;
   recordedAt: string;
   updatedAt: string;
   student?: Pick<Student, 'id' | 'firstName' | 'lastName'> & {
     class?: Pick<Class, 'id' | 'name'>;
   };
-  lesson?: Pick<Lesson, 'id' | 'date' | 'startTime' | 'endTime'> & {
+  lesson?: Pick<Lesson, 'id' | 'date' | 'startTime' | 'endTime' | 'isTest'> & {
     subject?: Pick<Subject, 'name'>;
   };
   recordedBy?: Pick<User, 'id' | 'firstName' | 'lastName'>;
