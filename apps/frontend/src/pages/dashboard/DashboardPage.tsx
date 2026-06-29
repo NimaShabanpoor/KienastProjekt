@@ -4,7 +4,7 @@
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 import { ROLE_LABELS } from '@schuladmin/shared';
-import { Users, BookOpen, AlertTriangle, BarChart2, CalendarDays, GraduationCap, CheckCircle2 } from 'lucide-react';
+import { Users, BookOpen, AlertTriangle, BarChart2, CalendarDays, GraduationCap, CheckCircle2, UserCog } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface QuickActionCard {
@@ -71,6 +71,13 @@ export default function DashboardPage() {
       icon: CalendarDays,
       href: '/timetable',
       color: 'bg-green-50 text-green-600',
+    },
+    {
+      title: 'Benutzer verwalten',
+      description: 'Lehrer und Leiter anlegen',
+      icon: UserCog,
+      href: '/users',
+      color: 'bg-rose-50 text-rose-600',
     },
     {
       title: 'Statistiken & Export',

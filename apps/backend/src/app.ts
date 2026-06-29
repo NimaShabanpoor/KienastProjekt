@@ -21,6 +21,7 @@ import classesRoutes from './modules/classes/classes.routes';
 import lessonsRoutes from './modules/lessons/lessons.routes';
 import absencesRoutes from './modules/absences/absences.routes';
 import gradesRoutes from './modules/grades/grades.routes';
+import exportsRoutes from './modules/exports/exports.routes';
 
 const app = express();
 
@@ -96,6 +97,7 @@ app.use('/api/v1/classes', classesRoutes);
 app.use('/api/v1/lessons', lessonsRoutes);
 app.use('/api/v1/absences', absencesRoutes);
 app.use('/api/v1/grades', gradesRoutes);
+app.use('/api/v1/exports', exportsRoutes);
 
 // ============================================================
 // FEHLERBEHANDLUNG

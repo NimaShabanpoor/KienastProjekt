@@ -94,3 +94,12 @@ export const getTimetable = async (req: Request, res: Response, next: NextFuncti
     res.json({ data: timetable });
   } catch (err) { next(err); }
 };
+
+export const createSubject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const id = req.params['id'] ?? '';
+    const subject = await classesService.createSubject(id, req.body as { name: string; teacherId: string });
+    req.auditEntityId = subject.id;
+    res.status(201).json({ data: subject });
+  } catch (err) { next(err); }
+};

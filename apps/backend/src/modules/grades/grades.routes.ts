@@ -2,7 +2,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/auth.middleware';
-import { adminOnly, authenticated } from '../../middleware/role.middleware';
+import { adminOnly } from '../../middleware/role.middleware';
 import { auditLogMiddleware } from '../../middleware/auditLog.middleware';
 import { validateMiddleware } from '../../middleware/validate.middleware';
 import * as gradesController from './grades.controller';

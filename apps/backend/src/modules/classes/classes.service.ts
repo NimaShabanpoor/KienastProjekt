@@ -157,3 +157,32 @@ export async function getClassTimetable(classId: string, dateFrom?: string, date
     orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
   });
 }
+
+export async function createSubject(
+  classId: string,
+  input: { name: string; teacherId: string }
+) {
+  await getClassById(classId);
+
+  const teacher = await prisma.user.findFirst({
+    where: { id: input.teacherId, role: Role.LEHRPERSON, isActive: true, deletedAt: null },
+  });
+  if (!teacher) {
+    throw new ApiError('Ungültiger Lehrer.', 'INVALID_TEACHER', 400);
+  }
+
+  return prisma.subject.create({
+    data: {
+      name: input.name,
+      classId,
+      teacherId: input.teacherId,
+      gradeCategories: {
+        create: [
+          { name: 'Prüfung', weight: 0.6 },
+          { name: 'Mündlich', weight: 0.4 },
+        ],
+      },
+    },
+    include: { teacher: { select: { id: true, firstName: true, lastName: true } } },
+  });
+}

@@ -1,11 +1,11 @@
 // React Router v6 – Alle Routen + ProtectedRoute Wrapper
 
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { Role } from '@schuladmin/shared';
 import type { ReactNode } from 'react';
+import AppShell from './components/AppShell';
 
-// Lazy-Imports für Code-Splitting
 import { lazy, Suspense } from 'react';
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
@@ -19,8 +19,8 @@ const AbsencesPage = lazy(() => import('./pages/absences/AbsencesPage'));
 const AbsenceExcusePage = lazy(() => import('./pages/absences/AbsenceExcusePage'));
 const GradesPage = lazy(() => import('./pages/grades/GradesPage'));
 const ExportsPage = lazy(() => import('./pages/exports/ExportsPage'));
+const UsersPage = lazy(() => import('./pages/users/UsersPage'));
 
-// ProtectedRoute: Weiterleitung wenn nicht authentifiziert
 function ProtectedRoute({
   children,
   requiredRole,
@@ -34,7 +34,6 @@ function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  // Rollen-Prüfung (nur UX – Sicherheit ist serverseitig)
   if (requiredRole && user?.role !== requiredRole) {
     return <Navigate to="/403" replace />;
   }
@@ -42,73 +41,33 @@ function ProtectedRoute({
   return <>{children}</>;
 }
 
-// App-Layout mit Suspense-Fallback
-function AppLayout() {
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen">Laden...</div>}>
-      <Outlet />
-    </Suspense>
-  );
-}
+const leaderOnly = Role.ABTEILUNGSLEITUNG;
 
 export const router = createBrowserRouter([
-  // Öffentliche Routen
   { path: '/login', element: <Suspense fallback={null}><LoginPage /></Suspense> },
   { path: '/2fa', element: <Suspense fallback={null}><TwoFactorPage /></Suspense> },
 
-  // Geschützte Routen
   {
     path: '/',
-    element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
+    element: (
+      <ProtectedRoute>
+        <AppShell />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'students', element: <StudentsPage /> },
       { path: 'students/:id', element: <StudentDetailPage /> },
-      {
-        path: 'classes',
-        element: (
-          <ProtectedRoute requiredRole={Role.ABTEILUNGSLEITUNG}>
-            <ClassesPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'timetable',
-        element: (
-          <ProtectedRoute requiredRole={Role.ABTEILUNGSLEITUNG}>
-            <TimetablePage />
-          </ProtectedRoute>
-        ),
-      },
+      { path: 'classes', element: <ProtectedRoute requiredRole={leaderOnly}><ClassesPage /></ProtectedRoute> },
+      { path: 'timetable', element: <ProtectedRoute requiredRole={leaderOnly}><TimetablePage /></ProtectedRoute> },
       { path: 'absences', element: <AbsencesPage /> },
-      {
-        path: 'absences/excuse',
-        element: (
-          <ProtectedRoute requiredRole={Role.ABTEILUNGSLEITUNG}>
-            <AbsenceExcusePage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'grades',
-        element: (
-          <ProtectedRoute requiredRole={Role.ABTEILUNGSLEITUNG}>
-            <GradesPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'exports',
-        element: (
-          <ProtectedRoute requiredRole={Role.ABTEILUNGSLEITUNG}>
-            <ExportsPage />
-          </ProtectedRoute>
-        ),
-      },
+      { path: 'absences/excuse', element: <ProtectedRoute requiredRole={leaderOnly}><AbsenceExcusePage /></ProtectedRoute> },
+      { path: 'grades', element: <ProtectedRoute requiredRole={leaderOnly}><GradesPage /></ProtectedRoute> },
+      { path: 'users', element: <ProtectedRoute requiredRole={leaderOnly}><UsersPage /></ProtectedRoute> },
+      { path: 'exports', element: <ProtectedRoute requiredRole={leaderOnly}><ExportsPage /></ProtectedRoute> },
       { path: '403', element: <div className="p-8 text-center"><h1 className="text-2xl font-bold text-red-600">Kein Zugriff</h1><p>Du hast keine Berechtigung für diese Seite.</p></div> },
     ],
   },
 
-  // Fallback
   { path: '*', element: <Navigate to="/" replace /> },
 ]);

@@ -118,6 +118,8 @@ export interface Grade {
   createdAt: string;
   updatedAt: string;
   category?: GradeCategory;
+  student?: Pick<Student, 'id' | 'firstName' | 'lastName'>;
+  subject?: Pick<Subject, 'id' | 'name'>;
   corrections?: GradeCorrection[];
 }
 

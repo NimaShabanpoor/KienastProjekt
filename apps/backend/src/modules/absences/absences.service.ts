@@ -107,7 +107,7 @@ export async function updateAbsence(
   id: string,
   status: AbsenceStatus,
   note: string | null | undefined,
-  userId: string,
+  _userId: string,
   role: Role
 ) {
   const absence = await prisma.absence.findUnique({

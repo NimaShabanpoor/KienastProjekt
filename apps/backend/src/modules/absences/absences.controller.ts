@@ -50,7 +50,7 @@ export const getStats = async (req: Request, res: Response, next: NextFunction):
   } catch (err) { next(err); }
 };
 
-export const getAlerts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getAlerts = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const threshold = env.ABSENCE_THRESHOLD;
     const alerts = await absencesService.getThresholdAlerts(threshold);

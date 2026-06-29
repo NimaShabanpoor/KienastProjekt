@@ -27,7 +27,7 @@ export async function listGrades(params: {
   requestingUserId: string;
   requestingUserRole: Role;
 }) {
-  const { subjectId, studentId, classId, categoryId, requestingUserId, requestingUserRole } = params;
+  const { subjectId, studentId, classId, categoryId, requestingUserRole } = params;
 
   if (requestingUserRole === Role.LEHRPERSON) {
     throw new ApiError('Nur der Leiter kann Noten einsehen.', 'FORBIDDEN', 403);

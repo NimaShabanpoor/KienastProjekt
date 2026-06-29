@@ -17,5 +17,6 @@ router.put('/:id', adminOnly, auditLogMiddleware('CLASS_UPDATED', AuditEntityTyp
 router.get('/:id/students', authenticated, classesController.getStudents);
 router.get('/:id/subjects', authenticated, classesController.getSubjects);
 router.get('/:id/timetable', authenticated, classesController.getTimetable);
+router.post('/:id/subjects', adminOnly, auditLogMiddleware('SUBJECT_CREATED', AuditEntityType.SUBJECT), classesController.createSubject);
 
 export default router;
