@@ -6,21 +6,29 @@ import { Role } from '@schuladmin/shared';
 
 export function usePermissions() {
   const { user } = useAuthStore();
+  const isLeader = user?.role === Role.ABTEILUNGSLEITUNG;
+  const isTeacher = user?.role === Role.LEHRPERSON;
 
   return {
-    // Rolle
-    isAdmin: user?.role === Role.ABTEILUNGSLEITUNG,
-    isTeacher: user?.role === Role.LEHRPERSON,
+    isLeader,
+    isAdmin: isLeader, // Alias für bestehenden Code
+    isTeacher,
     role: user?.role,
 
-    // Berechtigungen
-    canEditGrades: user?.role === Role.ABTEILUNGSLEITUNG,       // Nur Korrekturen
-    canManageStudents: user?.role === Role.ABTEILUNGSLEITUNG,
-    canManageClasses: user?.role === Role.ABTEILUNGSLEITUNG,
-    canManageUsers: user?.role === Role.ABTEILUNGSLEITUNG,
-    canExport: user?.role === Role.ABTEILUNGSLEITUNG,
-    canViewAuditLog: user?.role === Role.ABTEILUNGSLEITUNG,
-    canViewAllStudents: user?.role === Role.ABTEILUNGSLEITUNG,
-    canManageTimetable: user?.role === Role.ABTEILUNGSLEITUNG,
+    // Lehrer: nur Anwesenheit erfassen, Schülerliste der eigenen Klasse
+    canRecordAbsences: isTeacher || isLeader,
+
+    // Leiter: Verwaltung
+    canExcuseAbsences: isLeader,
+    canManageGrades: isLeader,
+    canEditGrades: isLeader,
+    canManageStudents: isLeader,
+    canManageClasses: isLeader,
+    canManageUsers: isLeader,
+    canExport: isLeader,
+    canViewAuditLog: isLeader,
+    canViewAllStudents: isLeader,
+    canManageTimetable: isLeader,
+    canViewAbsenceStats: isLeader,
   };
 }

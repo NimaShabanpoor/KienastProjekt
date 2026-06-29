@@ -57,14 +57,14 @@ async function main(): Promise<void> {
   // --------------------------------------------------------
   const klasse1 = await prisma.class.upsert({
     where: { name_semester_schoolYear: { name: 'INF-2023-A', semester: 1, schoolYear: '2024/25' } },
-    update: {},
-    create: { name: 'INF-2023-A', semester: 1, schoolYear: '2024/25' },
+    update: { homeroomTeacherId: lehrer1.id },
+    create: { name: 'INF-2023-A', semester: 1, schoolYear: '2024/25', homeroomTeacherId: lehrer1.id },
   });
 
   const klasse2 = await prisma.class.upsert({
     where: { name_semester_schoolYear: { name: 'INF-2023-B', semester: 1, schoolYear: '2024/25' } },
-    update: {},
-    create: { name: 'INF-2023-B', semester: 1, schoolYear: '2024/25' },
+    update: { homeroomTeacherId: lehrer2.id },
+    create: { name: 'INF-2023-B', semester: 1, schoolYear: '2024/25', homeroomTeacherId: lehrer2.id },
   });
 
   console.log(`Klassen erstellt: ${klasse1.name}, ${klasse2.name}`);
@@ -125,6 +125,32 @@ async function main(): Promise<void> {
   console.log(`Fächer für ${klasse1.name} erstellt`);
 
   // --------------------------------------------------------
+  // Heutige Lektion für Anwesenheitstest
+  // --------------------------------------------------------
+  const mathe = await prisma.subject.findFirst({
+    where: { name: 'Mathematik', classId: klasse1.id },
+  });
+  if (mathe) {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const existingLesson = await prisma.lesson.findFirst({
+      where: { subjectId: mathe.id, date: today },
+    });
+    if (!existingLesson) {
+      await prisma.lesson.create({
+        data: {
+          subjectId: mathe.id,
+          date: today,
+          startTime: '08:00',
+          endTime: '09:30',
+          room: 'A101',
+        },
+      });
+      console.log('Heutige Test-Lektion erstellt');
+    }
+  }
+
+  // --------------------------------------------------------
   // Konfiguration setzen
   // --------------------------------------------------------
   await prisma.config.upsert({
@@ -151,8 +177,8 @@ async function main(): Promise<void> {
   });
 
   console.log('Seed-Daten erfolgreich geladen!');
-  console.log('Login: admin@itbenedickt.ch / Schuladmin1234!');
-  console.log('Login: mueller@itbenedickt.ch / Schuladmin1234!');
+  console.log('Login: admin@itbenedickt.ch / Schuladmin1234! (Leiter)');
+  console.log('Login: mueller@itbenedickt.ch / Schuladmin1234! (Lehrer, Klasse INF-2023-A)');
 }
 
 main()

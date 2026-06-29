@@ -1,9 +1,11 @@
 // Lektionen-Service: CRUD + Konfliktprüfung
 // Validiert: Lehrpersonen-Konflikt, Raum-Konflikt, Zeitformat
 
+import { Role } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { logger } from '../../config/logger';
+import { getHomeroomClassIds } from '../../utils/teacherAccess';
 
 interface CreateLessonInput {
   subjectId: string;
@@ -87,13 +89,24 @@ export async function listLessons(params: {
   dateFrom?: string;
   dateTo?: string;
   isCancelled?: boolean;
+  requestingUserId?: string;
+  requestingUserRole?: Role;
 }) {
-  const { page, limit, subjectId, classId, dateFrom, dateTo, isCancelled } = params;
+  const { page, limit, subjectId, classId, dateFrom, dateTo, isCancelled, requestingUserId, requestingUserRole } = params;
   const skip = (page - 1) * limit;
+
+  let allowedClassIds: string[] | undefined;
+  if (requestingUserRole === Role.LEHRPERSON && requestingUserId) {
+    allowedClassIds = await getHomeroomClassIds(requestingUserId);
+    if (allowedClassIds.length === 0) {
+      return { lessons: [], total: 0, page, limit, totalPages: 0 };
+    }
+  }
 
   const where = {
     ...(subjectId && { subjectId }),
     ...(classId && { subject: { classId } }),
+    ...(allowedClassIds && { subject: { classId: { in: allowedClassIds } } }),
     ...(dateFrom && { date: { gte: new Date(dateFrom) } }),
     ...(dateTo && { date: { lte: new Date(dateTo) } }),
     ...(isCancelled !== undefined && { isCancelled }),

@@ -1,24 +1,17 @@
 // Absenzen-Controller
 
 import { Request, Response, NextFunction } from 'express';
+import { AbsenceStatus } from '@prisma/client';
 import * as absencesService from './absences.service';
 import { env } from '../../config/env';
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { prisma } = await import('../../config/database');
-    const absences = await prisma.absence.findMany({
-      where: {
-        ...(req.query['lessonId'] && { lessonId: req.query['lessonId'] as string }),
-        ...(req.query['studentId'] && { studentId: req.query['studentId'] as string }),
-        ...(req.query['status'] && { status: req.query['status'] as 'ANWESEND' | 'ENTSCHULDIGT' | 'UNENTSCHULDIGT' }),
-      },
-      include: {
-        student: { select: { id: true, firstName: true, lastName: true } },
-        lesson: { select: { id: true, date: true, startTime: true, endTime: true } },
-        recordedBy: { select: { id: true, firstName: true, lastName: true } },
-      },
-      take: 100,
+    const absences = await absencesService.listAbsences({
+      lessonId: req.query['lessonId'] as string | undefined,
+      studentId: req.query['studentId'] as string | undefined,
+      status: req.query['status'] as AbsenceStatus | undefined,
+      classId: req.query['classId'] as string | undefined,
     });
     res.json({ data: absences });
   } catch (err) { next(err); }

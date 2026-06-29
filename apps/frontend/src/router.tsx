@@ -16,7 +16,7 @@ const StudentDetailPage = lazy(() => import('./pages/students/StudentDetailPage'
 const ClassesPage = lazy(() => import('./pages/classes/ClassesPage'));
 const TimetablePage = lazy(() => import('./pages/timetable/TimetablePage'));
 const AbsencesPage = lazy(() => import('./pages/absences/AbsencesPage'));
-const AbsenceStatsPage = lazy(() => import('./pages/absences/AbsenceStatsPage'));
+const AbsenceExcusePage = lazy(() => import('./pages/absences/AbsenceExcusePage'));
 const GradesPage = lazy(() => import('./pages/grades/GradesPage'));
 const ExportsPage = lazy(() => import('./pages/exports/ExportsPage'));
 
@@ -72,10 +72,31 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      { path: 'timetable', element: <TimetablePage /> },
+      {
+        path: 'timetable',
+        element: (
+          <ProtectedRoute requiredRole={Role.ABTEILUNGSLEITUNG}>
+            <TimetablePage />
+          </ProtectedRoute>
+        ),
+      },
       { path: 'absences', element: <AbsencesPage /> },
-      { path: 'absences/stats', element: <AbsenceStatsPage /> },
-      { path: 'grades', element: <GradesPage /> },
+      {
+        path: 'absences/excuse',
+        element: (
+          <ProtectedRoute requiredRole={Role.ABTEILUNGSLEITUNG}>
+            <AbsenceExcusePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'grades',
+        element: (
+          <ProtectedRoute requiredRole={Role.ABTEILUNGSLEITUNG}>
+            <GradesPage />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'exports',
         element: (

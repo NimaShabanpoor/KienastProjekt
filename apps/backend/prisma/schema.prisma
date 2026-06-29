@@ -61,6 +61,7 @@ model User {
 
   // Beziehungen
   subjects         Subject[]         // Zugewiesene Fächer
+  homeroomClasses  Class[]           @relation("ClassHomeroomTeacher")
   absencesRecorded Absence[]         @relation("AbsenceRecordedBy")
   gradesCreated    Grade[]           @relation("GradeCreatedBy")
   gradeCorrections GradeCorrection[] @relation("CorrectionBy")
@@ -76,18 +77,21 @@ model User {
 // KLASSEN (z.B. INF-2023-A, Semester, Schuljahr)
 // ============================================================
 model Class {
-  id         String   @id @default(cuid())
-  name       String
-  semester   Int      // 1 oder 2
-  schoolYear String   // z.B. "2024/25"
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String
+  semester          Int      // 1 oder 2
+  schoolYear        String   // z.B. "2024/25"
+  homeroomTeacherId String?  // Zugewiesener Klassenlehrer
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Beziehungen
-  students   Student[]
-  subjects   Subject[]
+  homeroomTeacher User?     @relation("ClassHomeroomTeacher", fields: [homeroomTeacherId], references: [id])
+  students        Student[]
+  subjects        Subject[]
 
+  @@index([homeroomTeacherId])
   @@unique([name, semester, schoolYear])
   @@map("classes")
 }

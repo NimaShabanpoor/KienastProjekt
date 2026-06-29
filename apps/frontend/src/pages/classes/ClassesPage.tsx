@@ -1,16 +1,59 @@
-// Klassen-Verwaltung (nur Abteilungsleitung)
+// Klassen-Verwaltung (nur Leiter)
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import type { Class } from '@schuladmin/shared';
+import type { Class, User } from '@schuladmin/shared';
+import { Role } from '@schuladmin/shared';
 import { Plus, BookOpen } from 'lucide-react';
 
 export default function ClassesPage() {
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [semester, setSemester] = useState(1);
+  const [schoolYear, setSchoolYear] = useState('2024/25');
+  const [homeroomTeacherId, setHomeroomTeacherId] = useState('');
+
   const { data, isLoading } = useQuery({
     queryKey: ['classes'],
     queryFn: async () => {
       const { data } = await apiClient.get<{ data: Class[] }>('/api/v1/classes');
       return data.data;
+    },
+  });
+
+  const { data: teachers } = useQuery({
+    queryKey: ['teachers'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: User[] }>(`/api/v1/users?role=${Role.LEHRPERSON}`);
+      return data.data;
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      await apiClient.post('/api/v1/classes', {
+        name,
+        semester,
+        schoolYear,
+        homeroomTeacherId: homeroomTeacherId || null,
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['classes'] });
+      setShowForm(false);
+      setName('');
+      setHomeroomTeacherId('');
+    },
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ classId, teacherId }: { classId: string; teacherId: string | null }) => {
+      await apiClient.put(`/api/v1/classes/${classId}`, { homeroomTeacherId: teacherId });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
   });
 
@@ -21,10 +64,63 @@ export default function ClassesPage() {
           <h1 className="text-2xl font-bold text-neutral-900">Klassen</h1>
           <p className="text-neutral-500 mt-1">{data?.length ?? 0} Klassen</p>
         </div>
-        <button className="flex items-center gap-2 bg-brand-red hover:bg-brand-red-dark text-white font-medium py-2 px-4 rounded-lg">
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-2 bg-brand-red hover:bg-brand-red-dark text-white font-medium py-2 px-4 rounded-lg"
+        >
           <Plus className="w-4 h-4" /> Neue Klasse
         </button>
       </div>
+
+      {showForm && (
+        <form
+          onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}
+          className="bg-white rounded-xl border border-neutral-200 p-5 mb-6 space-y-4"
+        >
+          <h2 className="font-semibold text-neutral-900">Neue Klasse anlegen</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <input
+              required
+              placeholder="Klassenname (z.B. INF-2023-A)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+            />
+            <input
+              required
+              placeholder="Schuljahr (z.B. 2024/25)"
+              value={schoolYear}
+              onChange={(e) => setSchoolYear(e.target.value)}
+              className="px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+            />
+            <select
+              value={semester}
+              onChange={(e) => setSemester(Number(e.target.value))}
+              className="px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+            >
+              <option value={1}>Semester 1</option>
+              <option value={2}>Semester 2</option>
+            </select>
+            <select
+              value={homeroomTeacherId}
+              onChange={(e) => setHomeroomTeacherId(e.target.value)}
+              className="px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+            >
+              <option value="">-- Klassenlehrer wählen --</option>
+              {teachers?.map((t) => (
+                <option key={t.id} value={t.id}>{t.lastName}, {t.firstName}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            disabled={createMutation.isPending}
+            className="bg-brand-red text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+          >
+            Klasse erstellen
+          </button>
+        </form>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {isLoading && <p>Laden...</p>}
@@ -39,7 +135,26 @@ export default function ClassesPage() {
                 <p className="text-xs text-neutral-500">{cls.schoolYear} | Semester {cls.semester}</p>
               </div>
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${ cls.isActive ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-500'}`}>
+            <p className="text-sm text-neutral-600 mb-3">
+              {cls._count?.students ?? 0} Schüler
+            </p>
+            <label className="block text-xs font-medium text-neutral-500 mb-1">Klassenlehrer</label>
+            <select
+              value={cls.homeroomTeacherId ?? ''}
+              onChange={(e) =>
+                assignMutation.mutate({
+                  classId: cls.id,
+                  teacherId: e.target.value || null,
+                })
+              }
+              className="w-full px-2 py-1.5 border border-neutral-300 rounded-lg text-sm"
+            >
+              <option value="">-- Nicht zugewiesen --</option>
+              {teachers?.map((t) => (
+                <option key={t.id} value={t.id}>{t.lastName}, {t.firstName}</option>
+              ))}
+            </select>
+            <span className={`inline-block mt-3 text-xs px-2 py-0.5 rounded-full ${cls.isActive ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-500'}`}>
               {cls.isActive ? 'Aktiv' : 'Inaktiv'}
             </span>
           </div>

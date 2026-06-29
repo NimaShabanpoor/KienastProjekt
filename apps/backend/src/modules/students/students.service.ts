@@ -6,6 +6,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { PAGINATION } from '../../config/constants';
+import { getHomeroomClassIds } from '../../utils/teacherAccess';
 
 interface CreateStudentInput {
   firstName: string;
@@ -39,14 +40,13 @@ export async function listStudents(params: ListStudentsParams) {
 
   const skip = (page - 1) * limit;
 
-  // Lehrperson: nur Schüler aus eigenen Fächern/Klassen
+  // Lehrer: nur Schüler der zugewiesenen Klasse
   let allowedClassIds: string[] | undefined;
   if (requestingUserRole === Role.LEHRPERSON) {
-    const subjects = await prisma.subject.findMany({
-      where: { teacherId: requestingUserId, isActive: true },
-      select: { classId: true },
-    });
-    allowedClassIds = [...new Set(subjects.map((s) => s.classId))];
+    allowedClassIds = await getHomeroomClassIds(requestingUserId);
+    if (allowedClassIds.length === 0) {
+      return { students: [], total: 0, page, limit, totalPages: 0 };
+    }
   }
 
   const where = {

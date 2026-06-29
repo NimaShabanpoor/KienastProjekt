@@ -29,14 +29,8 @@ export async function listGrades(params: {
 }) {
   const { subjectId, studentId, classId, categoryId, requestingUserId, requestingUserRole } = params;
 
-  // Lehrperson: nur eigene Fächer
-  let allowedSubjectIds: string[] | undefined;
   if (requestingUserRole === Role.LEHRPERSON) {
-    const subjects = await prisma.subject.findMany({
-      where: { teacherId: requestingUserId },
-      select: { id: true },
-    });
-    allowedSubjectIds = subjects.map((s) => s.id);
+    throw new ApiError('Nur der Leiter kann Noten einsehen.', 'FORBIDDEN', 403);
   }
 
   const where = {
@@ -44,7 +38,6 @@ export async function listGrades(params: {
     ...(studentId && { studentId }),
     ...(categoryId && { categoryId }),
     ...(classId && { subject: { classId } }),
-    ...(allowedSubjectIds && { subjectId: { in: allowedSubjectIds } }),
   };
 
   return prisma.grade.findMany({
@@ -63,19 +56,18 @@ export async function listGrades(params: {
 }
 
 export async function createGrade(input: CreateGradeInput, createdById: string, role: Role) {
-  // Lehrperson: nur eigene Fächer
-  const subject = await prisma.subject.findUnique({
-    where: { id: input.subjectId },
-  });
-  if (!subject) throw new ApiError('Fach nicht gefunden.', 'SUBJECT_NOT_FOUND', 404);
-
-  if (role === Role.LEHRPERSON && subject.teacherId !== createdById) {
+  if (role === Role.LEHRPERSON) {
     throw new ApiError(
-      'Keine Berechtigung: Noten können nur im eigenen Fach eingetragen werden.',
+      'Nur der Leiter kann Noten eintragen.',
       'FORBIDDEN',
       403
     );
   }
+
+  const subject = await prisma.subject.findUnique({
+    where: { id: input.subjectId },
+  });
+  if (!subject) throw new ApiError('Fach nicht gefunden.', 'SUBJECT_NOT_FOUND', 404);
 
   // Note erstellen und sofort sperren
   return prisma.grade.create({

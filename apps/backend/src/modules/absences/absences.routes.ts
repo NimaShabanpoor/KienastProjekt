@@ -12,10 +12,10 @@ import { AuditEntityType } from '@prisma/client';
 const router = Router();
 router.use(authMiddleware);
 
-router.get('/', authenticated, absencesController.list);
+router.get('/', adminOnly, absencesController.list);
 router.post('/', authenticated, validateMiddleware({ body: CreateAbsenceBatchBodySchema }), auditLogMiddleware('ABSENCE_CREATED', AuditEntityType.ABSENCE), absencesController.createBatch);
-router.put('/:id', authenticated, validateMiddleware({ body: UpdateAbsenceBodySchema }), auditLogMiddleware('ABSENCE_UPDATED', AuditEntityType.ABSENCE), absencesController.update);
-router.get('/stats', authenticated, absencesController.getStats);
+router.put('/:id', adminOnly, validateMiddleware({ body: UpdateAbsenceBodySchema }), auditLogMiddleware('ABSENCE_UPDATED', AuditEntityType.ABSENCE), absencesController.update);
+router.get('/stats', adminOnly, absencesController.getStats);
 router.get('/threshold-alerts', adminOnly, absencesController.getAlerts);
 
 export default router;

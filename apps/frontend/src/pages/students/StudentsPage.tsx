@@ -8,7 +8,7 @@ import { useState } from 'react';
 import type { Student } from '@schuladmin/shared';
 
 export default function StudentsPage() {
-  const { canManageStudents } = usePermissions();
+  const { canManageStudents, isTeacher } = usePermissions();
   const [search, setSearch] = useState('');
 
   const { data, isLoading, isError } = useQuery({
@@ -25,7 +25,9 @@ export default function StudentsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Schülerinnen & Schüler</h1>
+          <h1 className="text-2xl font-bold text-neutral-900">
+            {isTeacher ? 'Schülerliste meiner Klasse' : 'Schülerinnen & Schüler'}
+          </h1>
           <p className="text-neutral-500 mt-1">
             {data?.length ?? 0} Schüler gefunden
           </p>

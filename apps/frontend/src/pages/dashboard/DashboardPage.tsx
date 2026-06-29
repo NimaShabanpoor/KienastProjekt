@@ -1,9 +1,10 @@
 // Dashboard-Seite
-// Übersicht je nach Rolle: Lehrperson vs. Abteilungsleitung
+// Übersicht je nach Rolle: Lehrer vs. Leiter
 
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
-import { Users, BookOpen, AlertTriangle, BarChart2, CalendarDays, GraduationCap } from 'lucide-react';
+import { ROLE_LABELS } from '@schuladmin/shared';
+import { Users, BookOpen, AlertTriangle, BarChart2, CalendarDays, GraduationCap, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface QuickActionCard {
@@ -16,72 +17,84 @@ interface QuickActionCard {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { isAdmin } = usePermissions();
+  const { isLeader } = usePermissions();
 
   const teacherActions: QuickActionCard[] = [
     {
-      title: 'Absenzen erfassen',
-      description: 'Präsenz für meine heutigen Lektionen eintragen',
+      title: 'Anwesenheit erfassen',
+      description: 'Schüler als anwesend oder abwesend markieren',
       icon: AlertTriangle,
       href: '/absences',
       color: 'bg-orange-50 text-orange-600',
     },
     {
-      title: 'Noten eintragen',
-      description: 'Prüfungs- und Hausaufgabennoten eintragen',
-      icon: GraduationCap,
-      href: '/grades',
-      color: 'bg-blue-50 text-blue-600',
-    },
-    {
-      title: 'Stundenplan',
-      description: 'Meine Lektionen übersicht',
-      icon: CalendarDays,
-      href: '/timetable',
-      color: 'bg-green-50 text-green-600',
-    },
-    {
       title: 'Schülerliste',
-      description: 'Schüler meiner Klassen anzeigen',
+      description: 'Schüler meiner Klasse anzeigen',
       icon: Users,
       href: '/students',
       color: 'bg-purple-50 text-purple-600',
     },
   ];
 
-  const adminActions: QuickActionCard[] = [
-    ...teacherActions,
+  const leaderActions: QuickActionCard[] = [
+    {
+      title: 'Absenzen entschuldigen',
+      description: 'Unentschuldigte Absenzen bearbeiten',
+      icon: CheckCircle2,
+      href: '/absences/excuse',
+      color: 'bg-yellow-50 text-yellow-600',
+    },
+    {
+      title: 'Noten verwalten',
+      description: 'Noten eintragen und korrigieren',
+      icon: GraduationCap,
+      href: '/grades',
+      color: 'bg-blue-50 text-blue-600',
+    },
+    {
+      title: 'Schüler verwalten',
+      description: 'Schülerinnen und Schüler hinzufügen',
+      icon: Users,
+      href: '/students',
+      color: 'bg-purple-50 text-purple-600',
+    },
     {
       title: 'Klassen verwalten',
-      description: 'Klassen, Fächer und Zuteilungen',
+      description: 'Klassen anlegen und Lehrer zuweisen',
       icon: BookOpen,
       href: '/classes',
       color: 'bg-indigo-50 text-indigo-600',
     },
     {
+      title: 'Stundenplan',
+      description: 'Lektionen und Stundenplan pflegen',
+      icon: CalendarDays,
+      href: '/timetable',
+      color: 'bg-green-50 text-green-600',
+    },
+    {
       title: 'Statistiken & Export',
-      description: 'Berichte, Zeugnisse, Absenzen-Statistiken',
+      description: 'Berichte und Absenzen-Statistiken',
       icon: BarChart2,
       href: '/exports',
       color: 'bg-teal-50 text-teal-600',
     },
   ];
 
-  const actions = isAdmin ? adminActions : teacherActions;
+  const actions = isLeader ? leaderActions : teacherActions;
+  const roleLabel = user?.role ? ROLE_LABELS[user.role] : '';
 
   return (
     <div className="p-6">
-      {/* Begrüssung */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-neutral-900">
           Guten Tag, {user?.firstName} {user?.lastName}
         </h1>
         <p className="text-neutral-500 mt-1">
-          {isAdmin ? 'Abteilungsleitung' : 'Lehrperson'} – IT Bénédict Zürich
+          {roleLabel} – IT Bénédict Zürich
         </p>
       </div>
 
-      {/* Quick-Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {actions.map((action) => (
           <Link

@@ -1,13 +1,15 @@
 // Absenzen-Service: Batch-Erfassung, Statistiken, Validierung
 // Geschäftsregeln:
 // - Keine Absenzen für ausgefallene Lektionen
-// - Lehrperson muss Lektion zugeteilt sein
+// - Lehrer (Klassenlehrer) darf nur Anwesend/Abwesend erfassen
+// - Leiter entschuldigt Absenzen (ENTSCHULDIGT)
 // - Upsert: bestehende Absenz wird aktualisiert
 
 import { AbsenceStatus, Role } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { logger } from '../../config/logger';
+import { assertTeacherHasClassAccess } from '../../utils/teacherAccess';
 
 interface AbsenceEntry {
   studentId: string;
@@ -22,10 +24,10 @@ async function validateAbsenceCreation(
   lessonId: string,
   teacherId: string,
   role: Role
-): Promise<void> {
+): Promise<string> {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    include: { subject: { select: { teacherId: true } } },
+    include: { subject: { select: { classId: true } } },
   });
 
   if (!lesson) throw new ApiError('Lektion nicht gefunden.', 'LESSON_NOT_FOUND', 404);
@@ -38,14 +40,29 @@ async function validateAbsenceCreation(
     );
   }
 
-  // Lehrperson: darf nur eigene Lektionen erfassen
-  if (role === Role.LEHRPERSON && lesson.subject.teacherId !== teacherId) {
+  const classId = lesson.subject.classId;
+
+  // Lehrer: nur zugewiesene Klasse
+  if (role === Role.LEHRPERSON) {
+    await assertTeacherHasClassAccess(teacherId, classId);
+  }
+
+  return classId;
+}
+
+function sanitizeTeacherAbsenceEntry(entry: AbsenceEntry): AbsenceEntry {
+  if (entry.status === AbsenceStatus.ENTSCHULDIGT) {
     throw new ApiError(
-      'Keine Berechtigung für diese Lektion.',
+      'Lehrer können Absenzen nicht entschuldigen. Bitte den Leiter kontaktieren.',
       'FORBIDDEN',
       403
     );
   }
+  if (entry.status === AbsenceStatus.ANWESEND) {
+    return entry;
+  }
+  // Abwesend → automatisch unentschuldigt bis der Leiter entschuldigt
+  return { ...entry, status: AbsenceStatus.UNENTSCHULDIGT };
 }
 
 export async function createAbsenceBatch(
@@ -56,9 +73,13 @@ export async function createAbsenceBatch(
 ) {
   await validateAbsenceCreation(lessonId, recordedById, role);
 
-  // Upsert: eine Transaktion für alle Einträge
+  const entries =
+    role === Role.LEHRPERSON
+      ? absences.map(sanitizeTeacherAbsenceEntry)
+      : absences;
+
   const results = await prisma.$transaction(
-    absences.map((entry) =>
+    entries.map((entry) =>
       prisma.absence.upsert({
         where: { studentId_lessonId: { studentId: entry.studentId, lessonId } },
         create: {
@@ -91,19 +112,63 @@ export async function updateAbsence(
 ) {
   const absence = await prisma.absence.findUnique({
     where: { id },
-    include: { lesson: { include: { subject: true } } },
+    include: { lesson: { include: { subject: { select: { classId: true } } } } },
   });
 
   if (!absence) throw new ApiError('Absenz nicht gefunden.', 'ABSENCE_NOT_FOUND', 404);
 
-  // Lehrperson: nur eigene Absenzen ändern
-  if (role === Role.LEHRPERSON && absence.lesson.subject.teacherId !== userId) {
-    throw new ApiError('Keine Berechtigung für diese Absenz.', 'FORBIDDEN', 403);
+  // Nur der Leiter darf Absenzen bearbeiten/entschuldigen
+  if (role === Role.LEHRPERSON) {
+    throw new ApiError(
+      'Nur der Leiter kann Absenzen bearbeiten oder entschuldigen.',
+      'FORBIDDEN',
+      403
+    );
   }
 
   return prisma.absence.update({
     where: { id },
     data: { status, note: note ?? null },
+  });
+}
+
+export async function listAbsences(params: {
+  lessonId?: string;
+  studentId?: string;
+  status?: AbsenceStatus;
+  classId?: string;
+}) {
+  const { lessonId, studentId, status, classId } = params;
+
+  return prisma.absence.findMany({
+    where: {
+      ...(lessonId && { lessonId }),
+      ...(studentId && { studentId }),
+      ...(status && { status }),
+      ...(classId && { student: { classId } }),
+    },
+    include: {
+      student: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          class: { select: { id: true, name: true } },
+        },
+      },
+      lesson: {
+        select: {
+          id: true,
+          date: true,
+          startTime: true,
+          endTime: true,
+          subject: { select: { name: true } },
+        },
+      },
+      recordedBy: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { lesson: { date: 'desc' } },
+    take: 200,
   });
 }
 
@@ -128,7 +193,6 @@ export async function getAbsenceStats(params: {
     } : {}),
   };
 
-  // Gesamtlektionen aus Absenzen
   const [total, entschuldigt, unentschuldigt] = await Promise.all([
     prisma.absence.count({ where: { ...where, status: { not: AbsenceStatus.ANWESEND } } }),
     prisma.absence.count({ where: { ...where, status: AbsenceStatus.ENTSCHULDIGT } }),
@@ -144,7 +208,6 @@ export async function getAbsenceStats(params: {
 }
 
 export async function getThresholdAlerts(threshold: number) {
-  // Schüler mit >= threshold unentschuldigten Absenzen
   const grouped = await prisma.absence.groupBy({
     by: ['studentId'],
     where: { status: AbsenceStatus.UNENTSCHULDIGT },

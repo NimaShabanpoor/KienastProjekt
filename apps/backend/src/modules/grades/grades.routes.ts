@@ -12,15 +12,15 @@ import { AuditEntityType } from '@prisma/client';
 const router = Router();
 router.use(authMiddleware);
 
-router.get('/', authenticated, gradesController.list);
-router.post('/', authenticated, validateMiddleware({ body: CreateGradeBodySchema }), auditLogMiddleware('GRADE_CREATED', AuditEntityType.GRADE), gradesController.create);
+router.get('/', adminOnly, gradesController.list);
+router.post('/', adminOnly, validateMiddleware({ body: CreateGradeBodySchema }), auditLogMiddleware('GRADE_CREATED', AuditEntityType.GRADE), gradesController.create);
 router.patch('/:id/correct', adminOnly, validateMiddleware({ body: CorrectGradeBodySchema }), auditLogMiddleware('GRADE_CORRECTED', AuditEntityType.GRADE_CORRECTION), gradesController.correct);
 router.get('/:id/corrections', adminOnly, gradesController.getCorrections);
-router.get('/average', authenticated, gradesController.getAverage);
+router.get('/average', adminOnly, gradesController.getAverage);
 router.get('/promotion-check', adminOnly, gradesController.getPromotionCheck);
 
 // Notenkategorien (unter /subjects/:subjectId/grade-categories gemounted)
-router.get('/subjects/:subjectId/categories', authenticated, gradesController.getCategories);
+router.get('/subjects/:subjectId/categories', adminOnly, gradesController.getCategories);
 router.post('/subjects/:subjectId/categories', adminOnly, validateMiddleware({ body: CreateGradeCategoryBodySchema }), gradesController.createCategory);
 
 export default router;

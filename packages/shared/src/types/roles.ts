@@ -6,6 +6,12 @@ export enum Role {
   ABTEILUNGSLEITUNG = 'ABTEILUNGSLEITUNG',
 }
 
+// Anzeigenamen in der UI
+export const ROLE_LABELS: Record<Role, string> = {
+  [Role.LEHRPERSON]: 'Lehrer',
+  [Role.ABTEILUNGSLEITUNG]: 'Leiter',
+};
+
 // Absenzen-Status pro Lektion
 export enum AbsenceStatus {
   ANWESEND = 'ANWESEND',

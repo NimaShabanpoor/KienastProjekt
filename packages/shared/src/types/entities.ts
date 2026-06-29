@@ -24,9 +24,12 @@ export interface Class {
   name: string;
   semester: number;
   schoolYear: string;
+  homeroomTeacherId: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  homeroomTeacher?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
+  _count?: { students: number; subjects: number };
 }
 
 // Schüler
@@ -83,8 +86,12 @@ export interface Absence {
   recordedById: string;
   recordedAt: string;
   updatedAt: string;
-  student?: Pick<Student, 'id' | 'firstName' | 'lastName'>;
-  lesson?: Lesson;
+  student?: Pick<Student, 'id' | 'firstName' | 'lastName'> & {
+    class?: Pick<Class, 'id' | 'name'>;
+  };
+  lesson?: Pick<Lesson, 'id' | 'date' | 'startTime' | 'endTime'> & {
+    subject?: Pick<Subject, 'name'>;
+  };
   recordedBy?: Pick<User, 'id' | 'firstName' | 'lastName'>;
 }
 

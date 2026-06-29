@@ -13,6 +13,8 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
       dateFrom: req.query['dateFrom'] as string | undefined,
       dateTo: req.query['dateTo'] as string | undefined,
       isCancelled: req.query['isCancelled'] !== undefined ? req.query['isCancelled'] === 'true' : undefined,
+      requestingUserId: req.user!.id,
+      requestingUserRole: req.user!.role,
     });
     res.json({ data: result.lessons, meta: { page: result.page, limit: result.limit, total: result.total, totalPages: result.totalPages } });
   } catch (err) { next(err); }

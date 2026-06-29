@@ -62,10 +62,10 @@ Backend API: http://localhost:3001/api/v1
 
 ## Rollen
 
-| Rolle | Berechtigungen |
-|-------|----------------|
-| `LEHRPERSON` | Eigene Lektionen, Absenzen erfassen, Noten eintragen |
-| `ABTEILUNGSLEITUNG` | Vollzugriff, Notenkorrektur, Export, Audit-Log |
+| Rolle | Bezeichnung | Berechtigungen |
+|-------|-------------|----------------|
+| `LEHRPERSON` | Lehrer | Anwesenheit erfassen (Anwesend/Abwesend) für zugewiesene Klasse, Schülerliste |
+| `ABTEILUNGSLEITUNG` | Leiter | Klassen/Schüler verwalten, Lehrer zuweisen, Absenzen entschuldigen, Noten, Export |
 
 ## Sicherheit & nDSG
 
