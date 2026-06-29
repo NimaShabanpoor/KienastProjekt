@@ -60,6 +60,8 @@ docker-compose exec backend npx prisma db seed
 Frontend: http://localhost:5173  
 Backend API: http://localhost:3001/api/v1  
 
+**Produktion (Railway + Vercel):** siehe [DEPLOYMENT.md](./DEPLOYMENT.md)
+
 ## Rollen
 
 | Rolle | Bezeichnung | Berechtigungen |

@@ -7,6 +7,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
+    "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
@@ -31,7 +32,6 @@
     "pizzip": "^3.1.4",
     "puppeteer": "^21.6.1",
     "qrcode": "^1.5.3",
-    "schuladmin": "file:../..",
     "speakeasy": "^2.0.0",
     "winston": "^3.11.0",
     "xlsx": "^0.18.5",
@@ -58,5 +58,8 @@
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -29,6 +29,9 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       NODE_ENV: production
       PORT: 3001
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+      UPLOAD_DIR: /app/uploads
     ports:
       - "3001:3001"
     depends_on:

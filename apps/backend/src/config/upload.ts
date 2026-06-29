@@ -3,8 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
+import { env } from './env';
 
-const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'medical-certificates');
+const UPLOAD_DIR = path.resolve(process.cwd(), env.UPLOAD_DIR, 'medical-certificates');
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 

@@ -5,12 +5,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { z } from 'zod';
 
-// .env aus dem Projektroot laden (für lokales npm run dev)
-dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+// Lokal: .env aus Backend-Ordner oder Monorepo-Root
+// Produktion (Railway/Vercel): Variablen kommen aus der Plattform
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+}
 
 const EnvSchema = z.object({
-  // Datenbank
-  DATABASE_URL: z.string().url('DATABASE_URL muss eine gültige URL sein'),
+  // Datenbank (Railway MySQL: DATABASE_URL=${{MySQL.MYSQL_URL}})
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL ist erforderlich'),
 
   // JWT – mindestens 32 Zeichen für ausreichende Entropie
   JWT_SECRET: z.string().min(32, 'JWT_SECRET muss mindestens 32 Zeichen lang sein'),
@@ -36,6 +40,9 @@ const EnvSchema = z.object({
   // Logging
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
   LOG_FILE_PATH: z.string().default('./logs'),
+
+  // Uploads (Railway Volume empfohlen: /app/uploads)
+  UPLOAD_DIR: z.string().default('./uploads'),
 });
 
 // Validierung beim Modulstart – wirft Fehler bei ungültiger Konfiguration

@@ -25,9 +25,8 @@ import exportsRoutes from './modules/exports/exports.routes';
 
 const app = express();
 
-// ============================================================
-// SICHERHEITS-MIDDLEWARES
-// ============================================================
+// Railway / Reverse-Proxy: korrekte Client-IP und HTTPS
+app.set('trust proxy', 1);
 
 // HTTP-Security-Header (CSP, HSTS, X-Frame-Options, etc.)
 app.use(

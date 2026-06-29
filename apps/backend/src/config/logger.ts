@@ -1,21 +1,18 @@
-// Winston-Logger-Konfiguration für SchulAdmin
-// Strukturiertes Logging + separater Audit-Log-Stream
+// Winston-Logger – Konsole in Produktion (Railway-Logs), Dateien lokal
 
 import winston from 'winston';
 import path from 'path';
+import fs from 'fs';
 import { env } from './env';
 
-// Datum-Format für Log-Einträge
 const LOG_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH:mm:ss';
 
-// Benutzerdefiniertes Log-Format
 const logFormat = winston.format.combine(
   winston.format.timestamp({ format: LOG_TIMESTAMP_FORMAT }),
   winston.format.errors({ stack: true }),
   winston.format.json()
 );
 
-// Konsolen-Format für Entwicklung (leserlicher)
 const consoleFormat = winston.format.combine(
   winston.format.colorize(),
   winston.format.timestamp({ format: LOG_TIMESTAMP_FORMAT }),
@@ -25,28 +22,28 @@ const consoleFormat = winston.format.combine(
   })
 );
 
-// Transports konfigurieren
-const transports: winston.transport[] = [
-  // Fehler-Log-Datei
-  new winston.transports.File({
-    filename: path.join(env.LOG_FILE_PATH, 'error.log'),
-    level: 'error',
-    format: logFormat,
-  }),
-  // Allgemeiner Log
-  new winston.transports.File({
-    filename: path.join(env.LOG_FILE_PATH, 'combined.log'),
-    format: logFormat,
-  }),
-];
+const transports: winston.transport[] = [];
 
-// In Entwicklung zusätzlich auf Konsole ausgeben
-if (env.NODE_ENV !== 'production') {
-  transports.push(
-    new winston.transports.Console({
-      format: consoleFormat,
-    })
-  );
+if (env.NODE_ENV === 'production') {
+  transports.push(new winston.transports.Console({ format: logFormat }));
+} else {
+  try {
+    fs.mkdirSync(env.LOG_FILE_PATH, { recursive: true });
+    transports.push(
+      new winston.transports.File({
+        filename: path.join(env.LOG_FILE_PATH, 'error.log'),
+        level: 'error',
+        format: logFormat,
+      }),
+      new winston.transports.File({
+        filename: path.join(env.LOG_FILE_PATH, 'combined.log'),
+        format: logFormat,
+      })
+    );
+  } catch {
+    // Fallback wenn Log-Ordner nicht beschreibbar
+  }
+  transports.push(new winston.transports.Console({ format: consoleFormat }));
 }
 
 export const logger = winston.createLogger({
@@ -54,13 +51,15 @@ export const logger = winston.createLogger({
   transports,
 });
 
-// Separater Audit-Logger für nDSG-konforme Protokollierung
 export const auditLogger = winston.createLogger({
   level: 'info',
-  transports: [
-    new winston.transports.File({
-      filename: path.join(env.LOG_FILE_PATH, 'audit.log'),
-      format: logFormat,
-    }),
-  ],
+  transports:
+    env.NODE_ENV === 'production'
+      ? [new winston.transports.Console({ format: logFormat })]
+      : [
+          new winston.transports.File({
+            filename: path.join(env.LOG_FILE_PATH, 'audit.log'),
+            format: logFormat,
+          }),
+        ],
 });

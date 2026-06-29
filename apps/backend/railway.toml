@@ -1,0 +1,11 @@
+# Railway-Konfiguration – SchulAdmin Backend
+# Root Directory im Railway-Dashboard: apps/backend
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.prod"
+
+[deploy]
+preDeployCommand = "npx prisma migrate deploy"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

@@ -1,27 +1,40 @@
-# Produktions-Dockerfile für das Backend
-# Multi-Stage Build für kleineres Image
+# Produktions-Dockerfile – Railway / Docker
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-RUN apk add --no-cache openssl
-COPY package*.json ./
-RUN npm ci --only=production
+RUN apk add --no-cache openssl curl
+
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY prisma ./prisma/
 RUN npx prisma generate
 
 COPY tsconfig.json ./
-COPY src ./src
+COPY src ./src/
 RUN npm run build
 
 # Produktions-Image
 FROM node:20-alpine
+
 WORKDIR /app
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl curl
+
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm install prisma@5.7.1 --no-save
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY prisma ./prisma/
+
+RUN mkdir -p uploads/medical-certificates logs
 
 EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-3001}/health || exit 1
+
 CMD ["node", "dist/app.js"]

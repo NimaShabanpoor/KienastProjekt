@@ -6,10 +6,11 @@ import * as authService from './auth.service';
 import { env } from '../../config/env';
 
 // Cookie-Optionen für Refresh-Token
+// Cross-Origin (Vercel + Railway): sameSite=none + secure
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
-  sameSite: env.NODE_ENV === 'development' ? ('lax' as const) : ('strict' as const),
+  sameSite: (env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: '/api/v1/auth',
 };
