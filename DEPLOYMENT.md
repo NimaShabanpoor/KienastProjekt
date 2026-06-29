@@ -21,10 +21,25 @@ SchulAdmin wird so gehostet:
 ## 2. Backend auf Railway
 
 1. Im gleichen Projekt: **New Service** → **GitHub Repo** verbinden
-2. **Settings** → **Root Directory**: `apps/backend`
+2. **Wichtig – eine der beiden Optionen:**
+
+### Option A (empfohlen): Root Directory setzen
+
+**Settings** → **Root Directory**: `apps/backend`
+
+Dann nutzt Railway `apps/backend/railway.toml` (Dockerfile) oder `apps/backend/railpack.json`.
+
+### Option B: Monorepo-Root (Standard)
+
+Root Directory leer lassen – im Repo-Root liegen bereits:
+
+- `railway.toml` – Build- & Start-Befehl für `apps/backend`
+- `railpack.json` – Railpack-Konfiguration
+- `Procfile` – Start-Befehl als Fallback
+- `package.json` → `"start"` Script
+
 3. **Settings** → **Deploy**:
-   - Builder: Dockerfile (`Dockerfile.prod` via `railway.toml`)
-   - Pre-deploy: `npx prisma migrate deploy` (bereits in `railway.toml`)
+   - Builder: **Railpack** (Standard) oder **Dockerfile** (`apps/backend/Dockerfile.prod` bei Option A)
 
 ### Umgebungsvariablen (Backend-Service)
 

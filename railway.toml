@@ -1,0 +1,12 @@
+# Railway – Backend aus Monorepo-Root
+# Alternative: Root Directory = apps/backend (dann apps/backend/railway.toml nutzen)
+
+[build]
+builder = "RAILPACK"
+buildCommand = "cd apps/backend && npm ci && npx prisma generate && npm run build"
+watchPatterns = ["apps/backend/**"]
+
+[deploy]
+startCommand = "cd apps/backend && npx prisma migrate deploy && node dist/app.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

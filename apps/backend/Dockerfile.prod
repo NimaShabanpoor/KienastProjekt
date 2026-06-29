@@ -23,7 +23,7 @@ RUN apk add --no-cache openssl curl
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm install prisma@5.7.1 --no-save
+RUN npm ci --omit=dev --ignore-scripts && npm install prisma@5.7.1 --no-save
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "npx prisma migrate deploy && node dist/app.js"
+  }
+}
