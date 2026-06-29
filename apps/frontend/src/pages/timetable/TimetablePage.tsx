@@ -17,6 +17,7 @@ export default function TimetablePage() {
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('09:30');
   const [room, setRoom] = useState('');
+  const [isTest, setIsTest] = useState(false);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const weekEnd = format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
@@ -50,7 +51,7 @@ export default function TimetablePage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      await apiClient.post('/api/v1/lessons', { subjectId, date, startTime, endTime, room: room || null });
+      await apiClient.post('/api/v1/lessons', { subjectId, date, startTime, endTime, room: room || null, isTest });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['lessons'] });
@@ -110,6 +111,10 @@ export default function TimetablePage() {
             <input required type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" />
             <input required type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" />
             <input value={room} onChange={(e) => setRoom(e.target.value)} placeholder="Raum" className="px-3 py-2 border rounded-lg text-sm" />
+            <label className="flex items-center gap-2 text-sm text-neutral-700 px-1">
+              <input type="checkbox" checked={isTest} onChange={(e) => setIsTest(e.target.checked)} className="rounded" />
+              Test / Prüfung (Arztzeugnis bei Absenz)
+            </label>
           </div>
           <button type="submit" disabled={createMutation.isPending} className="bg-brand-red text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">Lektion erstellen</button>
         </form>
@@ -123,7 +128,12 @@ export default function TimetablePage() {
         {data?.map((lesson) => (
           <div key={lesson.id} className={`flex items-center justify-between p-4 border-b border-neutral-100 last:border-0 ${lesson.isCancelled ? 'opacity-50 bg-neutral-50' : ''}`}>
             <div>
-              <span className="font-medium text-neutral-900">{lesson.subject?.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-neutral-900">{lesson.subject?.name}</span>
+                {lesson.isTest && (
+                  <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">TEST</span>
+                )}
+              </div>
               {lesson.subject?.class && <span className="text-xs text-neutral-400 ml-2">{lesson.subject.class.name}</span>}
               {lesson.isCancelled && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Ausgefallen</span>}
               <p className="text-sm text-neutral-500">{format(new Date(lesson.date), 'EEEE, d. MMMM yyyy', { locale: de })}</p>

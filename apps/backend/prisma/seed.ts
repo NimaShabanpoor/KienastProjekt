@@ -144,9 +144,15 @@ async function main(): Promise<void> {
           startTime: '08:00',
           endTime: '09:30',
           room: 'A101',
+          isTest: true,
         },
       });
       console.log('Heutige Test-Lektion erstellt');
+    } else {
+      await prisma.lesson.update({
+        where: { id: existingLesson.id },
+        data: { isTest: true },
+      });
     }
   }
 
