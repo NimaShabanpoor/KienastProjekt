@@ -25,18 +25,15 @@ SchulAdmin wird so gehostet:
 
 ### Option A (empfohlen): Root Directory setzen
 
-**Settings** → **Root Directory**: `apps/backend`
+**Settings** → **Root Directory**: `apps/backend` (**Pflicht** für Railpack)
 
-Dann nutzt Railway `apps/backend/railway.toml` (Dockerfile) oder `apps/backend/railpack.json`.
+Railpack liest `railpack.json` vom Repo-Root, führt Befehle aber bereits in `apps/backend` aus – deshalb keine `cd apps/backend`-Pfade in den Configs.
 
-### Option B: Monorepo-Root (Standard)
+Alternative Builder: **Dockerfile** (`Dockerfile.prod` via `apps/backend/railway.toml`).
 
-Root Directory leer lassen – im Repo-Root liegen bereits:
+### Option B: Monorepo-Root (nicht empfohlen)
 
-- `railway.toml` – Build- & Start-Befehl für `apps/backend`
-- `railpack.json` – Railpack-Konfiguration
-- `Procfile` – Start-Befehl als Fallback
-- `package.json` → `"start"` Script
+Nur nutzen, wenn Root Directory leer bleibt – dann müssten die Railpack-Befehle wieder `cd apps/backend` enthalten.
 
 3. **Settings** → **Deploy**:
    - Builder: **Railpack** (Standard) oder **Dockerfile** (`apps/backend/Dockerfile.prod` bei Option A)

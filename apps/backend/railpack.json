@@ -1,5 +1,14 @@
 {
   "$schema": "https://schema.railpack.com",
+  "steps": {
+    "install": {
+      "commands": ["npm ci --ignore-scripts"]
+    },
+    "build": {
+      "inputs": [{ "step": "install" }],
+      "commands": ["npx prisma generate && npm run build"]
+    }
+  },
   "deploy": {
     "startCommand": "npx prisma migrate deploy && node dist/app.js"
   }
