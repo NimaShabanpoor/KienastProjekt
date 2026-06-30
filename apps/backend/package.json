@@ -7,7 +7,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
-    "start:prod": "prisma migrate deploy && node dist/app.js",
+    "start:prod": "npx prisma@5.7.1 migrate deploy && node dist/app.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",

@@ -6,10 +6,10 @@
   "steps": {
     "build": {
       "inputs": [{ "step": "install" }, "."],
-      "commands": ["npx prisma generate && npm run build"]
+      "commands": ["npm run prisma:generate && npm run build"]
     }
   },
   "deploy": {
-    "startCommand": "npx prisma migrate deploy && node dist/app.js"
+    "startCommand": "npm run start:prod"
   }
 }

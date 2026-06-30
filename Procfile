@@ -1,1 +1,1 @@
-web: npx prisma migrate deploy && node dist/app.js
+web: npm run start:prod --prefix apps/backend

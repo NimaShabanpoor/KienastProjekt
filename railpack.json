@@ -4,12 +4,29 @@
     "node": "20"
   },
   "steps": {
+    "install": {
+      "inputs": [
+        {
+          "local": true,
+          "include": ["apps/backend/package.json", "apps/backend/package-lock.json"]
+        }
+      ],
+      "commands": ["npm ci --prefix apps/backend --ignore-scripts"]
+    },
     "build": {
-      "inputs": [{ "step": "install" }, "."],
-      "commands": ["npx prisma generate && npm run build"]
+      "inputs": [
+        { "step": "install" },
+        {
+          "local": true,
+          "include": ["apps/backend/**"]
+        }
+      ],
+      "commands": [
+        "npm run prisma:generate --prefix apps/backend && npm run build --prefix apps/backend"
+      ]
     }
   },
   "deploy": {
-    "startCommand": "npx prisma migrate deploy && node dist/app.js"
+    "startCommand": "npm run start:prod --prefix apps/backend"
   }
 }

@@ -1,11 +1,11 @@
-# Railway – Backend (Root Directory im Dashboard: apps/backend)
-# Befehle laufen bereits innerhalb von apps/backend.
+# Railway – SchulToolKienast Backend
+# Root Directory im Dashboard: leer (Monorepo-Root) ODER apps/backend
 
 [build]
 builder = "RAILPACK"
 watchPatterns = ["apps/backend/**"]
 
 [deploy]
-startCommand = "npx prisma migrate deploy && node dist/app.js"
+startCommand = "npm run start:prod --prefix apps/backend"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
