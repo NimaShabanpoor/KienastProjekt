@@ -3,16 +3,6 @@
   "packages": {
     "node": "20"
   },
-  "steps": {
-    "build": {
-      "inputs": [{ "step": "install" }, "."],
-      "commands": [
-        "npm ci --prefix apps/backend --ignore-scripts",
-        "npm run prisma:generate --prefix apps/backend",
-        "npm run build --prefix apps/backend"
-      ]
-    }
-  },
   "deploy": {
     "startCommand": "npm run start:prod --prefix apps/backend"
   }
