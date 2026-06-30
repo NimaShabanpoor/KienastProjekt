@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.railpack.com",
+  "packages": {
+    "node": "20"
+  },
   "steps": {
-    "install": {
-      "commands": ["npm ci --ignore-scripts"]
-    },
     "build": {
-      "inputs": [{ "step": "install" }],
+      "inputs": [{ "step": "install" }, "."],
       "commands": ["npx prisma generate && npm run build"]
     }
   },
