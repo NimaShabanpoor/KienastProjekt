@@ -1,0 +1,41 @@
+# SchulToolKienast Backend – Monorepo-Root (Railway ohne Root Directory)
+# Für Root Directory = apps/backend: apps/backend/Dockerfile.prod nutzen
+
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+RUN apk add --no-cache openssl curl
+
+COPY apps/backend/package.json apps/backend/package-lock.json ./
+RUN npm ci --ignore-scripts
+
+COPY apps/backend/prisma ./prisma/
+RUN npx prisma generate
+
+COPY apps/backend/tsconfig.json ./
+COPY apps/backend/src ./src/
+RUN npm run build
+
+FROM node:20-alpine
+
+WORKDIR /app
+RUN apk add --no-cache openssl curl
+
+ENV NODE_ENV=production
+
+COPY apps/backend/package.json apps/backend/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm install prisma@5.7.1 --no-save
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY apps/backend/prisma ./prisma/
+
+RUN mkdir -p uploads/medical-certificates logs
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-3001}/health || exit 1
+
+CMD ["node", "dist/app.js"]

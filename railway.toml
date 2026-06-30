@@ -1,9 +1,11 @@
 # SchulToolKienast Backend – Railway
-# Root Directory im Dashboard: apps/backend
+# Baut vom Monorepo-Root (Root Directory leer lassen)
+# Alternative: Root Directory = apps/backend → dockerfilePath = "apps/backend/Dockerfile.prod"
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.prod"
+watchPatterns = ["apps/backend/**"]
 
 [deploy]
 preDeployCommand = "npx prisma@5.7.1 migrate deploy"

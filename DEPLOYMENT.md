@@ -23,11 +23,14 @@ SchulAdmin wird so gehostet:
 1. Im gleichen Projekt: **New Service** → **GitHub Repo** verbinden
 2. **Wichtig – eine der beiden Optionen:**
 
-### Option A (empfohlen): Root Directory setzen
+### Option A: Monorepo-Root (aktuell)
 
-**Settings** → **Root Directory**: `apps/backend` (**Pflicht**)
+**Root Directory leer lassen** – nutzt `Dockerfile.prod` im Repo-Root.
 
-Builder: **Dockerfile** (`Dockerfile.prod` via `railway.toml`) – kein Railpack nötig.
+### Option B: Root Directory setzen
+
+**Settings** → **Root Directory**: `apps/backend`  
+Dann in `railway.toml`: `dockerfilePath = "apps/backend/Dockerfile.prod"`
 
 Migration: `preDeployCommand` in `railway.toml` (`prisma migrate deploy`).
 
