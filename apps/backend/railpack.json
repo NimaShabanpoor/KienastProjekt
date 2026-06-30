@@ -3,12 +3,6 @@
   "packages": {
     "node": "20"
   },
-  "steps": {
-    "build": {
-      "inputs": [{ "step": "install" }, "."],
-      "commands": ["npm run prisma:generate && npm run build"]
-    }
-  },
   "deploy": {
     "startCommand": "npm run start:prod"
   }
