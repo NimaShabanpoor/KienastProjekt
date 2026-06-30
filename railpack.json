@@ -4,25 +4,12 @@
     "node": "20"
   },
   "steps": {
-    "install": {
-      "inputs": [
-        {
-          "local": true,
-          "include": ["apps/backend/package.json", "apps/backend/package-lock.json"]
-        }
-      ],
-      "commands": ["npm ci --prefix apps/backend --ignore-scripts"]
-    },
     "build": {
-      "inputs": [
-        { "step": "install" },
-        {
-          "local": true,
-          "include": ["apps/backend/**"]
-        }
-      ],
+      "inputs": [{ "step": "install" }, "."],
       "commands": [
-        "npm run prisma:generate --prefix apps/backend && npm run build --prefix apps/backend"
+        "npm ci --prefix apps/backend --ignore-scripts",
+        "npm run prisma:generate --prefix apps/backend",
+        "npm run build --prefix apps/backend"
       ]
     }
   },
