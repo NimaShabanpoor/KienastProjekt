@@ -62,7 +62,7 @@ export const router = createBrowserRouter([
       { path: 'timetable', element: <ProtectedRoute requiredRole={leaderOnly}><TimetablePage /></ProtectedRoute> },
       { path: 'absences', element: <AbsencesPage /> },
       { path: 'absences/excuse', element: <ProtectedRoute requiredRole={leaderOnly}><AbsenceExcusePage /></ProtectedRoute> },
-      { path: 'grades', element: <ProtectedRoute requiredRole={leaderOnly}><GradesPage /></ProtectedRoute> },
+      { path: 'grades', element: <GradesPage /> },
       { path: 'users', element: <ProtectedRoute requiredRole={leaderOnly}><UsersPage /></ProtectedRoute> },
       { path: 'exports', element: <ProtectedRoute requiredRole={leaderOnly}><ExportsPage /></ProtectedRoute> },
       { path: '403', element: <div className="p-8 text-center"><h1 className="text-2xl font-bold text-red-600">Kein Zugriff</h1><p>Du hast keine Berechtigung für diese Seite.</p></div> },

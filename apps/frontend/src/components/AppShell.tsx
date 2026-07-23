@@ -24,6 +24,7 @@ const LEADER_LINKS = [
 const TEACHER_LINKS = [
   { href: '/', label: 'Dashboard' },
   { href: '/absences', label: 'Anwesenheit' },
+  { href: '/grades', label: 'Noten' },
   { href: '/students', label: 'Schüler' },
 ];
 

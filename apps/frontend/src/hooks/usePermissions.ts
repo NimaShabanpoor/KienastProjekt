@@ -15,12 +15,14 @@ export function usePermissions() {
     isTeacher,
     role: user?.role,
 
-    // Lehrer: nur Anwesenheit erfassen, Schülerliste der eigenen Klasse
+    // Lehrer: Anwesenheit + Noten für eigene Fächer
     canRecordAbsences: isTeacher || isLeader,
+    canEnterGrades: isTeacher,
+    canCorrectGrades: isLeader,
 
     // Leiter: Verwaltung
     canExcuseAbsences: isLeader,
-    canManageGrades: isLeader,
+    canManageGrades: isLeader || isTeacher,
     canEditGrades: isLeader,
     canManageStudents: isLeader,
     canManageClasses: isLeader,

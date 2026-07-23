@@ -1,6 +1,7 @@
 // Noten-Controller
 
 import { Request, Response, NextFunction } from 'express';
+import { Role } from '@prisma/client';
 import * as gradesService from './grades.service';
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -27,6 +28,33 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     req.auditEntityId = grade.id;
     req.auditNewValue = { value: grade.value, studentId: grade.studentId };
     res.status(201).json({ data: grade });
+  } catch (err) { next(err); }
+};
+
+export const createBatch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const body = req.body as {
+      subjectId: string;
+      categoryId: string;
+      title: string;
+      date: string;
+      entries: Array<{ studentId: string; value: number }>;
+    };
+    const grades = await gradesService.createGradeBatch(body, req.user!.id, req.user!.role);
+    req.auditEntityId = grades[0]?.id;
+    req.auditNewValue = { count: grades.length, title: body.title, subjectId: body.subjectId };
+    res.status(201).json({ data: grades });
+  } catch (err) { next(err); }
+};
+
+export const mySubjects = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (req.user!.role !== Role.LEHRPERSON) {
+      res.status(403).json({ error: 'Nur für Lehrpersonen.', code: 'FORBIDDEN' });
+      return;
+    }
+    const subjects = await gradesService.listTeacherSubjects(req.user!.id);
+    res.json({ data: subjects });
   } catch (err) { next(err); }
 };
 

@@ -19,8 +19,23 @@ export const CreateGradeBodySchema = z.object({
   subjectId: z.string().cuid('Ungültige Fach-ID'),
   categoryId: z.string().cuid('Ungültige Kategorie-ID'),
   value: SwissGradeSchema,
-  description: z.string().max(200).optional().nullable(),
+  description: z.string().min(1, 'Testtitel erforderlich').max(200),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss YYYY-MM-DD sein'),
+});
+
+export const CreateGradeBatchBodySchema = z.object({
+  subjectId: z.string().cuid('Ungültige Fach-ID'),
+  categoryId: z.string().cuid('Ungültige Kategorie-ID'),
+  title: z.string().min(1, 'Testtitel erforderlich').max(200),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss YYYY-MM-DD sein'),
+  entries: z
+    .array(
+      z.object({
+        studentId: z.string().cuid('Ungültige Schüler-ID'),
+        value: SwissGradeSchema,
+      })
+    )
+    .min(1, 'Mindestens eine Note erforderlich'),
 });
 
 export const CorrectGradeBodySchema = z.object({

@@ -28,6 +28,13 @@ export default function DashboardPage() {
       color: 'bg-orange-50 text-orange-600',
     },
     {
+      title: 'Noten eintragen',
+      description: 'Testtitel vergeben und Noten der Schüler erfassen',
+      icon: GraduationCap,
+      href: '/grades',
+      color: 'bg-blue-50 text-blue-600',
+    },
+    {
       title: 'Schülerliste',
       description: 'Schüler meiner Klasse anzeigen',
       icon: Users,
@@ -45,8 +52,8 @@ export default function DashboardPage() {
       color: 'bg-yellow-50 text-yellow-600',
     },
     {
-      title: 'Noten verwalten',
-      description: 'Noten eintragen und korrigieren',
+      title: 'Noten korrigieren',
+      description: 'Eingetragene Noten prüfen und korrigieren',
       icon: GraduationCap,
       href: '/grades',
       color: 'bg-blue-50 text-blue-600',
