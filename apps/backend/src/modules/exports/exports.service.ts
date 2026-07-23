@@ -72,34 +72,42 @@ export async function exportGradesExcel(classId: string): Promise<{ buffer: Buff
     ],
   });
 
-  const rows = grades.map((g) => ({
-    Datum: g.date.toISOString().split('T')[0],
-    Klasse: classRecord.name,
-    Schüler: `${g.student.lastName}, ${g.student.firstName}`,
-    Fach: g.subject.name,
-    Kategorie: g.category.name,
-    Note: g.value,
-    Beschreibung: g.description ?? '',
-  }));
+  const headers = ['Nachname', 'Vorname', 'Fach', 'Kategorie', 'Note', 'Datum', 'Beschreibung'];
+  const dataRows = grades.map((g) => [
+    g.student.lastName,
+    g.student.firstName,
+    g.subject.name,
+    g.category.name,
+    g.value,
+    g.date.toISOString().split('T')[0],
+    g.description ?? '',
+  ]);
 
-  const worksheet = XLSX.utils.json_to_sheet(
-    rows.length > 0
-      ? rows
-      : [{ Datum: '', Klasse: classRecord.name, Schüler: '', Fach: '', Kategorie: '', Note: '', Beschreibung: '' }]
-  );
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    [`Notenübersicht – Klasse ${classRecord.name}`],
+    [`Exportiert am ${new Date().toLocaleDateString('de-CH')}`],
+    [],
+    headers,
+    ...dataRows,
+  ]);
+
+  worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
   worksheet['!cols'] = [
-    { wch: 12 },
-    { wch: 14 },
-    { wch: 22 },
     { wch: 16 },
     { wch: 14 },
+    { wch: 18 },
+    { wch: 14 },
     { wch: 8 },
-    { wch: 28 },
+    { wch: 12 },
+    { wch: 30 },
   ];
+  if (dataRows.length > 0) {
+    worksheet['!autofilter'] = { ref: `A4:G${3 + dataRows.length}` };
+  }
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Noten');
-  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  const buffer = Buffer.from(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer);
 
   return { buffer, className: classRecord.name };
 }

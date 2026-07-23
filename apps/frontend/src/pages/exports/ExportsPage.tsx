@@ -36,14 +36,26 @@ export default function ExportsPage() {
 
   const handleExport = async (endpoint: string, filename: string): Promise<void> => {
     try {
-      const response = await apiClient.get(endpoint, { responseType: 'blob' });
+      const response = await apiClient.get<ArrayBuffer>(endpoint, { responseType: 'arraybuffer' });
       const lower = filename.toLowerCase();
+      const bytes = new Uint8Array(response.data);
+
+      // Sicherstellen, dass wirklich eine Excel-Datei ankommt (nicht CSV/JSON-Fehler)
+      if (lower.endsWith('.xlsx')) {
+        const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b; // PK.. = ZIP/XLSX
+        if (!isZip) {
+          const text = new TextDecoder().decode(bytes.slice(0, 200));
+          alert(`Excel-Export fehlgeschlagen: ${text || 'Unerwartete Antwort vom Server.'}`);
+          return;
+        }
+      }
+
       const mime = lower.endsWith('.pdf')
         ? 'application/pdf'
         : lower.endsWith('.xlsx')
           ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           : 'text/csv;charset=utf-8';
-      const url = window.URL.createObjectURL(new Blob([response.data as BlobPart], { type: mime }));
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: mime }));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', filename);
