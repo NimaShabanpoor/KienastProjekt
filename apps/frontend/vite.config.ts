@@ -14,6 +14,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,
+    watch: {
+      // Windows + Docker: Dateiänderungen sonst oft nicht erkannt
+      usePolling: true,
+      interval: 1000,
+    },
     // Proxy für API-Anfragen im Entwicklungsmodus
     proxy: {
       '/api': {
