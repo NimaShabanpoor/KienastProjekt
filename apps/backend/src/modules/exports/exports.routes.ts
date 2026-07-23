@@ -8,7 +8,7 @@ import * as exportsController from './exports.controller';
 const router = Router();
 router.use(authMiddleware, adminOnly);
 
-router.get('/absences/csv', exportsController.absencesCsv);
+router.get('/absences/excel', exportsController.absencesExcel);
 router.get('/grades/excel', exportsController.gradesExcel);
 router.get('/grades/pdf', exportsController.gradesPdf);
 router.get('/statistics/promotion', exportsController.promotionCsv);

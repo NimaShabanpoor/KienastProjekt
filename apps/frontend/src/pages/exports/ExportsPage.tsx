@@ -100,11 +100,14 @@ export default function ExportsPage() {
         <div className="bg-white rounded-xl border border-neutral-200 p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-orange-50 rounded-lg"><Users className="w-4 h-4 text-orange-600" /></div>
-            <h3 className="font-semibold text-neutral-900">Absenzen (CSV)</h3>
+            <h3 className="font-semibold text-neutral-900">Absenzen (Excel)</h3>
           </div>
-          <p className="text-sm text-neutral-500 mb-4">Alle Absenzen als CSV-Datei</p>
-          <button onClick={() => void handleExport('/api/v1/exports/absences/csv', 'absenzen.csv')} className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark">
-            <Download className="w-4 h-4" /> CSV exportieren
+          <p className="text-sm text-neutral-500 mb-4">Alle Absenzen übersichtlich mit Name, Klasse und Status</p>
+          <button
+            onClick={() => void handleExport('/api/v1/exports/absences/excel', 'absenzen.xlsx')}
+            className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark"
+          >
+            <Download className="w-4 h-4" /> Excel exportieren
           </button>
         </div>
 

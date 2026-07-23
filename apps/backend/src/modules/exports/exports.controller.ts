@@ -24,10 +24,10 @@ function sendExcel(res: Response, filename: string, buffer: Buffer): void {
   res.send(buffer);
 }
 
-export const absencesCsv = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const absencesExcel = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const csv = await exportsService.exportAbsencesCsv();
-    sendCsv(res, 'absenzen.csv', csv);
+    const buffer = await exportsService.exportAbsencesExcel();
+    sendExcel(res, 'absenzen.xlsx', buffer);
   } catch (err) { next(err); }
 };
 

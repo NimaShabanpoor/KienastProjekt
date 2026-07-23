@@ -23,7 +23,49 @@ function toCsv(headers: string[], rows: (string | number | null | undefined)[][]
   return lines.join('\n');
 }
 
-export async function exportAbsencesCsv(): Promise<string> {
+function buildExcelBuffer(options: {
+  title: string;
+  sheetName: string;
+  headers: string[];
+  rows: (string | number | null | undefined)[][];
+  colWidths: number[];
+}): Buffer {
+  const exportedAt = new Date().toLocaleDateString('de-CH');
+  const lastCol = options.headers.length - 1;
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    [options.title],
+    [`Exportiert am ${exportedAt} · ${options.rows.length} Einträge`],
+    [],
+    options.headers,
+    ...options.rows.map((row) => row.map((cell) => (cell == null ? '' : cell))),
+  ]);
+
+  worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }];
+  worksheet['!cols'] = options.colWidths.map((wch) => ({ wch }));
+  if (options.rows.length > 0) {
+    const endCol = String.fromCharCode(65 + lastCol);
+    worksheet['!autofilter'] = { ref: `A4:${endCol}${3 + options.rows.length}` };
+  }
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, options.sheetName);
+  return Buffer.from(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer);
+}
+
+function formatAbsenceStatus(status: string): string {
+  switch (status) {
+    case 'ENTSCHULDIGT':
+      return 'Entschuldigt';
+    case 'UNENTSCHULDIGT':
+      return 'Unentschuldigt';
+    case 'ANWESEND':
+      return 'Anwesend';
+    default:
+      return status;
+  }
+}
+
+export async function exportAbsencesExcel(): Promise<Buffer> {
   const absences = await prisma.absence.findMany({
     where: { status: { not: 'ANWESEND' } },
     include: {
@@ -31,21 +73,40 @@ export async function exportAbsencesCsv(): Promise<string> {
       lesson: { include: { subject: { select: { name: true } } } },
       recordedBy: { select: { firstName: true, lastName: true } },
     },
-    orderBy: { recordedAt: 'desc' },
+    orderBy: [
+      { lesson: { date: 'desc' } },
+      { student: { lastName: 'asc' } },
+      { student: { firstName: 'asc' } },
+    ],
   });
 
-  return toCsv(
-    ['Datum', 'Klasse', 'Schüler', 'Fach', 'Status', 'Notiz', 'Erfasst von'],
-    absences.map((a) => [
+  return buildExcelBuffer({
+    title: 'Absenzenübersicht',
+    sheetName: 'Absenzen',
+    headers: [
+      'Datum',
+      'Klasse',
+      'Nachname',
+      'Vorname',
+      'Fach',
+      'Status',
+      'Arztzeugnis',
+      'Notiz',
+      'Erfasst von',
+    ],
+    rows: absences.map((a) => [
       a.lesson.date.toISOString().split('T')[0],
       a.student.class.name,
-      `${a.student.lastName}, ${a.student.firstName}`,
+      a.student.lastName,
+      a.student.firstName,
       a.lesson.subject.name,
-      a.status,
-      a.note,
+      formatAbsenceStatus(a.status),
+      a.hasMedicalCertificate ? 'Ja' : 'Nein',
+      a.note ?? '',
       `${a.recordedBy.lastName}, ${a.recordedBy.firstName}`,
-    ])
-  );
+    ]),
+    colWidths: [12, 14, 16, 14, 18, 16, 12, 28, 20],
+  });
 }
 
 export async function exportGradesExcel(classId: string): Promise<{ buffer: Buffer; className: string }> {
@@ -83,31 +144,13 @@ export async function exportGradesExcel(classId: string): Promise<{ buffer: Buff
     g.description ?? '',
   ]);
 
-  const worksheet = XLSX.utils.aoa_to_sheet([
-    [`Notenübersicht – Klasse ${classRecord.name}`],
-    [`Exportiert am ${new Date().toLocaleDateString('de-CH')}`],
-    [],
+  const buffer = buildExcelBuffer({
+    title: `Notenübersicht – Klasse ${classRecord.name}`,
+    sheetName: 'Noten',
     headers,
-    ...dataRows,
-  ]);
-
-  worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
-  worksheet['!cols'] = [
-    { wch: 16 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 14 },
-    { wch: 8 },
-    { wch: 12 },
-    { wch: 30 },
-  ];
-  if (dataRows.length > 0) {
-    worksheet['!autofilter'] = { ref: `A4:G${3 + dataRows.length}` };
-  }
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Noten');
-  const buffer = Buffer.from(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer);
+    rows: dataRows,
+    colWidths: [16, 14, 18, 14, 8, 12, 30],
+  });
 
   return { buffer, className: classRecord.name };
 }
