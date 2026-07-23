@@ -37,28 +37,33 @@ export default function ExportsPage() {
   const handleExport = async (endpoint: string, filename: string): Promise<void> => {
     try {
       const response = await apiClient.get<ArrayBuffer>(endpoint, { responseType: 'arraybuffer' });
-      const lower = filename.toLowerCase();
       const bytes = new Uint8Array(response.data);
+      const isZip = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b; // PK.. = XLSX
+      const isPdf = bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
 
-      // Sicherstellen, dass wirklich eine Excel-Datei ankommt (nicht CSV/JSON-Fehler)
-      if (lower.endsWith('.xlsx')) {
-        const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b; // PK.. = ZIP/XLSX
-        if (!isZip) {
-          const text = new TextDecoder().decode(bytes.slice(0, 200));
-          alert(`Excel-Export fehlgeschlagen: ${text || 'Unerwartete Antwort vom Server.'}`);
-          return;
-        }
+      // Endung am echten Inhalt ausrichten (verhindert Excel-Warnung Format ≠ Erweiterung)
+      let safeName = filename;
+      let mime = 'application/octet-stream';
+      if (isZip) {
+        safeName = filename.replace(/\.(csv|pdf)$/i, '.xlsx').replace(/\.xlsx$/i, '.xlsx');
+        if (!safeName.toLowerCase().endsWith('.xlsx')) safeName = `${filename.replace(/\.[^.]+$/, '')}.xlsx`;
+        mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      } else if (isPdf) {
+        safeName = filename.replace(/\.(csv|xlsx)$/i, '.pdf');
+        if (!safeName.toLowerCase().endsWith('.pdf')) safeName = `${filename.replace(/\.[^.]+$/, '')}.pdf`;
+        mime = 'application/pdf';
+      } else if (filename.toLowerCase().endsWith('.xlsx')) {
+        const text = new TextDecoder().decode(bytes.slice(0, 200));
+        alert(`Excel-Export fehlgeschlagen: ${text || 'Unerwartete Antwort vom Server.'}`);
+        return;
+      } else {
+        mime = 'text/csv;charset=utf-8';
       }
 
-      const mime = lower.endsWith('.pdf')
-        ? 'application/pdf'
-        : lower.endsWith('.xlsx')
-          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-          : 'text/csv;charset=utf-8';
       const url = window.URL.createObjectURL(new Blob([bytes], { type: mime }));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', filename);
+      link.setAttribute('download', safeName);
       document.body.appendChild(link);
       link.click();
       link.remove();
