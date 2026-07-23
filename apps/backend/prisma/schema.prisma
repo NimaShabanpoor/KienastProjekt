@@ -24,6 +24,12 @@ enum AbsenceStatus {
   UNENTSCHULDIGT
 }
 
+// Ausnahme vom Wochenstundenplan für ein einzelnes Datum
+enum TimetableExceptionType {
+  CANCEL
+  OVERRIDE
+}
+
 // Entität-Typen für den AuditLog
 enum AuditEntityType {
   USER
@@ -68,6 +74,8 @@ model User {
   gradeCorrections GradeCorrection[] @relation("CorrectionBy")
   auditLogs        AuditLog[]
   notifications    Notification[]
+  timetableSlots   TimetableSlot[]   @relation("TimetableSlotTeacher")
+  timetableExceptions TimetableException[] @relation("TimetableExceptionTeacher")
 
   @@index([email])
   @@index([role])
@@ -91,6 +99,8 @@ model Class {
   homeroomTeacher User?     @relation("ClassHomeroomTeacher", fields: [homeroomTeacherId], references: [id])
   students        Student[]
   subjects        Subject[]
+  timetableSlots  TimetableSlot[]
+  timetableExceptions TimetableException[]
 
   @@index([homeroomTeacherId])
   @@unique([name, semester, schoolYear])
@@ -144,6 +154,8 @@ model Subject {
   lessons         Lesson[]
   grades          Grade[]
   gradeCategories GradeCategory[]
+  timetableSlots  TimetableSlot[]
+  timetableExceptions TimetableException[]
 
   @@index([classId])
   @@index([teacherId])
@@ -174,6 +186,57 @@ model Lesson {
   @@index([subjectId])
   @@index([date])
   @@map("lessons")
+}
+
+// ============================================================
+// STUNDENPLAN-VORLAGE (wiederkehrend Mo–Fr, pro Klasse)
+// dayOfWeek: 1=Mo … 5=Fr, period: 1–8
+// ============================================================
+model TimetableSlot {
+  id        String   @id @default(cuid())
+  classId   String
+  dayOfWeek Int      // 1=Montag … 5=Freitag
+  period    Int      // 1–8
+  subjectId String
+  teacherId String
+  room      String?
+  isTest    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id])
+  teacher User    @relation("TimetableSlotTeacher", fields: [teacherId], references: [id])
+
+  @@unique([classId, dayOfWeek, period])
+  @@index([classId])
+  @@index([teacherId])
+  @@map("timetable_slots")
+}
+
+// ============================================================
+// STUNDENPLAN-AUSNAHMEN (einzelnes Datum, ohne Vorlage zu ändern)
+// ============================================================
+model TimetableException {
+  id        String                 @id @default(cuid())
+  classId   String
+  date      DateTime               @db.Date
+  period    Int                    // 1–8
+  type      TimetableExceptionType
+  subjectId String?
+  teacherId String?
+  room      String?
+  isTest    Boolean?
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+
+  class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id])
+  teacher User?    @relation("TimetableExceptionTeacher", fields: [teacherId], references: [id])
+
+  @@unique([classId, date, period])
+  @@index([classId, date])
+  @@map("timetable_exceptions")
 }
 
 // ============================================================

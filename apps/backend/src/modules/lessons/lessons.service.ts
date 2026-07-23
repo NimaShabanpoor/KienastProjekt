@@ -6,6 +6,7 @@ import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { logger } from '../../config/logger';
 import { getHomeroomClassIds } from '../../utils/teacherAccess';
+import { materializeLessonsForRange } from '../timetable/timetable.service';
 
 interface CreateLessonInput {
   subjectId: string;
@@ -107,6 +108,11 @@ export async function listLessons(params: {
 }) {
   const { page, limit, subjectId, classId, dateFrom, dateTo, isCancelled, requestingUserId, requestingUserRole } = params;
   const skip = (page - 1) * limit;
+
+  // Wochenvorlage → konkrete Lessons für den Zeitraum materialisieren
+  if (dateFrom && dateTo) {
+    await materializeLessonsForRange({ classId, dateFrom, dateTo });
+  }
 
   let allowedClassIds: string[] | undefined;
   if (requestingUserRole === Role.LEHRPERSON && requestingUserId) {
