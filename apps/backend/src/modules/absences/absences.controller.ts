@@ -19,10 +19,25 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
 
 export const createBatch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { lessonId, absences } = req.body as { lessonId: string; absences: Array<{ studentId: string; status: 'ANWESEND' | 'ENTSCHULDIGT' | 'UNENTSCHULDIGT'; note?: string | null }> };
-    const results = await absencesService.createAbsenceBatch(lessonId, absences, req.user!.id, req.user!.role);
-    req.auditEntityId = lessonId;
-    req.auditNewValue = { count: results.length, lessonId };
+    const body = req.body as {
+      lessonId?: string;
+      lessonIds?: string[];
+      absences: Array<{
+        studentId: string;
+        status: 'ANWESEND' | 'ENTSCHULDIGT' | 'UNENTSCHULDIGT';
+        note?: string | null;
+        absentLessonCount?: number;
+      }>;
+    };
+    const lessonIds = body.lessonIds ?? (body.lessonId ? [body.lessonId] : []);
+    const results = await absencesService.createAbsenceBatch(
+      lessonIds,
+      body.absences,
+      req.user!.id,
+      req.user!.role
+    );
+    req.auditEntityId = lessonIds[0];
+    req.auditNewValue = { count: results.length, lessonIds };
     res.status(201).json({ data: results });
   } catch (err) { next(err); }
 };

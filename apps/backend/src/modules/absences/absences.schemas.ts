@@ -7,12 +7,20 @@ export const AbsenceEntrySchema = z.object({
   studentId: z.string().cuid('Ungültige Schüler-ID'),
   status: z.nativeEnum(AbsenceStatus),
   note: z.string().max(500).optional().nullable(),
+  /** Bei Abwesend: wie viele der ausgewählten Lektionen betroffen sind */
+  absentLessonCount: z.coerce.number().int().min(1).max(20).optional(),
 });
 
-export const CreateAbsenceBatchBodySchema = z.object({
-  lessonId: z.string().cuid('Ungültige Lektions-ID'),
-  absences: z.array(AbsenceEntrySchema).min(1, 'Mindestens eine Absenz-Eintragung erforderlich'),
-});
+export const CreateAbsenceBatchBodySchema = z
+  .object({
+    lessonId: z.string().cuid('Ungültige Lektions-ID').optional(),
+    lessonIds: z.array(z.string().cuid('Ungültige Lektions-ID')).min(1).max(20).optional(),
+    absences: z.array(AbsenceEntrySchema).min(1, 'Mindestens eine Absenz-Eintragung erforderlich'),
+  })
+  .refine((data) => Boolean(data.lessonId) || (data.lessonIds && data.lessonIds.length > 0), {
+    message: 'lessonId oder lessonIds erforderlich',
+    path: ['lessonIds'],
+  });
 
 export const UpdateAbsenceBodySchema = z.object({
   status: z.nativeEnum(AbsenceStatus),

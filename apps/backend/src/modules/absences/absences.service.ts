@@ -19,6 +19,7 @@ interface AbsenceEntry {
   studentId: string;
   status: AbsenceStatus;
   note?: string | null;
+  absentLessonCount?: number;
 }
 
 // --------------------------------------------------------
@@ -94,40 +95,100 @@ function validateTestExcuse(absence: {
 }
 
 export async function createAbsenceBatch(
-  lessonId: string,
+  lessonIdsInput: string | string[],
   absences: AbsenceEntry[],
   recordedById: string,
   role: Role
 ) {
-  await validateAbsenceCreation(lessonId, recordedById, role);
+  const lessonIds = Array.isArray(lessonIdsInput) ? [...new Set(lessonIdsInput)] : [lessonIdsInput];
+  if (lessonIds.length === 0) {
+    throw new ApiError('Mindestens eine Lektion erforderlich.', 'MISSING_LESSONS', 400);
+  }
+
+  // Alle Lektionen validieren und chronologisch sortieren
+  const lessons = await prisma.lesson.findMany({
+    where: { id: { in: lessonIds } },
+    include: { subject: { select: { classId: true } } },
+    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+  });
+
+  if (lessons.length !== lessonIds.length) {
+    throw new ApiError('Eine oder mehrere Lektionen wurden nicht gefunden.', 'LESSON_NOT_FOUND', 404);
+  }
+
+  const classIds = new Set(lessons.map((l) => l.subject.classId));
+  if (classIds.size > 1) {
+    throw new ApiError(
+      'Alle Lektionen müssen zur selben Klasse gehören.',
+      'MIXED_CLASSES',
+      400
+    );
+  }
+
+  for (const lesson of lessons) {
+    await validateAbsenceCreation(lesson.id, recordedById, role);
+  }
 
   const entries =
     role === Role.LEHRPERSON
       ? absences.map(sanitizeTeacherAbsenceEntry)
       : absences;
 
-  const results = await prisma.$transaction(
-    entries.map((entry) =>
-      prisma.absence.upsert({
-        where: { studentId_lessonId: { studentId: entry.studentId, lessonId } },
-        create: {
-          studentId: entry.studentId,
-          lessonId,
-          status: entry.status,
-          note: entry.note ?? null,
-          recordedById,
-        },
-        update: {
-          status: entry.status,
-          note: entry.note ?? null,
-          recordedById,
-        },
-        include: { student: { select: { firstName: true, lastName: true } } },
-      })
-    )
-  );
+  const sortedLessonIds = lessons.map((l) => l.id);
+  const ops = [];
 
-  logger.info('Absenzen erfasst', { lessonId, count: results.length, recordedById });
+  for (const entry of entries) {
+    const absentCount =
+      entry.status === AbsenceStatus.ANWESEND
+        ? 0
+        : Math.min(
+            entry.absentLessonCount ?? sortedLessonIds.length,
+            sortedLessonIds.length
+          );
+
+    if (entry.status !== AbsenceStatus.ANWESEND && absentCount < 1) {
+      throw new ApiError(
+        'Bei Abwesenheit muss mindestens 1 Lektion angegeben werden.',
+        'INVALID_LESSON_COUNT',
+        400
+      );
+    }
+
+    for (let i = 0; i < sortedLessonIds.length; i++) {
+      const lessonId = sortedLessonIds[i]!;
+      const statusForLesson =
+        entry.status === AbsenceStatus.ANWESEND || i >= absentCount
+          ? AbsenceStatus.ANWESEND
+          : entry.status;
+
+      ops.push(
+        prisma.absence.upsert({
+          where: { studentId_lessonId: { studentId: entry.studentId, lessonId } },
+          create: {
+            studentId: entry.studentId,
+            lessonId,
+            status: statusForLesson,
+            note: entry.note ?? null,
+            recordedById,
+          },
+          update: {
+            status: statusForLesson,
+            note: entry.note ?? null,
+            recordedById,
+          },
+          include: { student: { select: { firstName: true, lastName: true } } },
+        })
+      );
+    }
+  }
+
+  const results = await prisma.$transaction(ops);
+
+  logger.info('Absenzen erfasst', {
+    lessonIds: sortedLessonIds,
+    count: results.length,
+    recordedById,
+  });
   return results;
 }
 

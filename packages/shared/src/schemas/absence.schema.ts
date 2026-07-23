@@ -8,17 +8,24 @@ export const AbsenceEntrySchema = z.object({
   studentId: z.string().cuid('Ungültige Schüler-ID'),
   status: z.nativeEnum(AbsenceStatus),
   note: z.string().max(500).optional().nullable(),
+  absentLessonCount: z.coerce.number().int().min(1).max(20).optional(),
 });
 
 export type AbsenceEntryInput = z.infer<typeof AbsenceEntrySchema>;
 
-// Batch-Erfassung für eine Lektion
-export const CreateAbsenceBatchSchema = z.object({
-  lessonId: z.string().cuid('Ungültige Lektions-ID'),
-  absences: z
-    .array(AbsenceEntrySchema)
-    .min(1, 'Mindestens eine Absenz-Eintragung erforderlich'),
-});
+// Batch-Erfassung für eine oder mehrere Lektionen
+export const CreateAbsenceBatchSchema = z
+  .object({
+    lessonId: z.string().cuid('Ungültige Lektions-ID').optional(),
+    lessonIds: z.array(z.string().cuid('Ungültige Lektions-ID')).min(1).max(20).optional(),
+    absences: z
+      .array(AbsenceEntrySchema)
+      .min(1, 'Mindestens eine Absenz-Eintragung erforderlich'),
+  })
+  .refine((data) => Boolean(data.lessonId) || (data.lessonIds && data.lessonIds.length > 0), {
+    message: 'lessonId oder lessonIds erforderlich',
+    path: ['lessonIds'],
+  });
 
 export type CreateAbsenceBatchInput = z.infer<typeof CreateAbsenceBatchSchema>;
 
