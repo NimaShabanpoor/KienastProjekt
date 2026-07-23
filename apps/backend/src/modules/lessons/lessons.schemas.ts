@@ -11,6 +11,8 @@ const LessonBaseSchema = z.object({
   endTime: z.string().regex(timeRegex, 'Endzeit muss HH:mm sein'),
   room: z.string().max(50).optional().nullable(),
   isTest: z.coerce.boolean().optional().default(false),
+  /** Anzahl aufeinanderfolgender Lektionen (z. B. 2 für Doppelstunde) */
+  lessonCount: z.coerce.number().int().min(1).max(8).optional().default(1),
 });
 
 export const CreateLessonBodySchema = LessonBaseSchema.refine(

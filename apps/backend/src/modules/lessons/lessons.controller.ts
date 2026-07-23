@@ -29,9 +29,10 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
 
 export const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const lesson = await lessonsService.createLesson(req.body as Parameters<typeof lessonsService.createLesson>[0]);
-    req.auditEntityId = lesson.id;
-    res.status(201).json({ data: lesson });
+    const lessons = await lessonsService.createLesson(req.body as Parameters<typeof lessonsService.createLesson>[0]);
+    req.auditEntityId = lessons[0]?.id;
+    req.auditNewValue = { count: lessons.length };
+    res.status(201).json({ data: lessons.length === 1 ? lessons[0] : lessons });
   } catch (err) { next(err); }
 };
 

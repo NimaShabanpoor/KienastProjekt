@@ -15,7 +15,8 @@ export default function TimetablePage() {
   const [subjectId, setSubjectId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('08:00');
-  const [endTime, setEndTime] = useState('09:30');
+  const [endTime, setEndTime] = useState('08:45');
+  const [lessonCount, setLessonCount] = useState(1);
   const [room, setRoom] = useState('');
   const [isTest, setIsTest] = useState(false);
 
@@ -51,11 +52,20 @@ export default function TimetablePage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      await apiClient.post('/api/v1/lessons', { subjectId, date, startTime, endTime, room: room || null, isTest });
+      await apiClient.post('/api/v1/lessons', {
+        subjectId,
+        date,
+        startTime,
+        endTime,
+        room: room || null,
+        isTest,
+        lessonCount,
+      });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['lessons'] });
       setShowForm(false);
+      setLessonCount(1);
     },
   });
 
@@ -108,15 +118,43 @@ export default function TimetablePage() {
               {subjects?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" />
-            <input required type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" />
-            <input required type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" />
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Start (1. Lektion)</label>
+              <input required type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Ende (1. Lektion)</label>
+              <input required type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Anzahl Lektionen</label>
+              <input
+                required
+                type="number"
+                min={1}
+                max={8}
+                value={lessonCount}
+                onChange={(e) => setLessonCount(Math.min(8, Math.max(1, Number(e.target.value) || 1)))}
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
             <input value={room} onChange={(e) => setRoom(e.target.value)} placeholder="Raum" className="px-3 py-2 border rounded-lg text-sm" />
             <label className="flex items-center gap-2 text-sm text-neutral-700 px-1">
               <input type="checkbox" checked={isTest} onChange={(e) => setIsTest(e.target.checked)} className="rounded" />
               Test / Prüfung (Arztzeugnis bei Absenz)
             </label>
           </div>
-          <button type="submit" disabled={createMutation.isPending} className="bg-brand-red text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">Lektion erstellen</button>
+          {lessonCount > 1 && (
+            <p className="text-xs text-neutral-500">
+              Es werden {lessonCount} aufeinanderfolgende Lektionen angelegt (je mit der Dauer von Start bis Ende).
+            </p>
+          )}
+          <button type="submit" disabled={createMutation.isPending} className="bg-brand-red text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">
+            {lessonCount > 1 ? `${lessonCount} Lektionen erstellen` : 'Lektion erstellen'}
+          </button>
+          {createMutation.isError && (
+            <p className="text-sm text-red-600">Erstellen fehlgeschlagen. Zeitkonflikt oder ungültige Angaben prüfen.</p>
+          )}
         </form>
       )}
 

@@ -14,7 +14,19 @@ interface CreateLessonInput {
   endTime: string;
   room?: string | null;
   isTest?: boolean;
+  lessonCount?: number;
   excludeLessonId?: string;
+}
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+function minutesToTime(total: number): string {
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 // --------------------------------------------------------
@@ -146,19 +158,67 @@ export async function getLessonById(id: string) {
 }
 
 export async function createLesson(input: CreateLessonInput) {
-  await checkLessonConflicts(input);
+  const lessonCount = input.lessonCount ?? 1;
+  const durationMinutes = timeToMinutes(input.endTime) - timeToMinutes(input.startTime);
+  if (durationMinutes <= 0) {
+    throw new ApiError('Startzeit muss vor Endzeit liegen.', 'INVALID_TIME_RANGE', 400);
+  }
 
-  return prisma.lesson.create({
-    data: {
-      subjectId: input.subjectId,
-      date: new Date(input.date),
-      startTime: input.startTime,
-      endTime: input.endTime,
-      room: input.room ?? null,
-      isTest: input.isTest ?? false,
-    },
-    include: { subject: { select: { name: true } } },
+  const slots: { startTime: string; endTime: string }[] = [];
+  for (let i = 0; i < lessonCount; i++) {
+    const startMins = timeToMinutes(input.startTime) + i * durationMinutes;
+    const endMins = startMins + durationMinutes;
+    if (endMins > 24 * 60) {
+      throw new ApiError(
+        'Die Lektionen würden über Mitternacht hinausgehen. Bitte Startzeit oder Anzahl anpassen.',
+        'LESSONS_OVERFLOW',
+        400
+      );
+    }
+    slots.push({
+      startTime: minutesToTime(startMins),
+      endTime: minutesToTime(endMins),
+    });
+  }
+
+  // Konflikte für alle Slots prüfen, bevor etwas angelegt wird
+  for (const slot of slots) {
+    await checkLessonConflicts({
+      ...input,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+    });
+  }
+
+  const created = [];
+  for (const slot of slots) {
+    const lesson = await prisma.lesson.create({
+      data: {
+        subjectId: input.subjectId,
+        date: new Date(input.date),
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        room: input.room ?? null,
+        isTest: input.isTest ?? false,
+      },
+      include: {
+        subject: {
+          include: {
+            class: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+    created.push(lesson);
+  }
+
+  logger.info('Lektionen erstellt', {
+    count: created.length,
+    subjectId: input.subjectId,
+    date: input.date,
   });
+
+  return created;
 }
 
 export async function updateLesson(id: string, input: Partial<CreateLessonInput>) {

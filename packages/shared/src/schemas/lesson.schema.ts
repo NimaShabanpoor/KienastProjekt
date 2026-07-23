@@ -12,6 +12,8 @@ const LessonBaseSchema = z.object({
   startTime: z.string().regex(timeRegex, 'Startzeit muss im Format HH:mm sein'),
   endTime: z.string().regex(timeRegex, 'Endzeit muss im Format HH:mm sein'),
   room: z.string().max(50).optional().nullable(),
+  isTest: z.coerce.boolean().optional().default(false),
+  lessonCount: z.coerce.number().int().min(1).max(8).optional().default(1),
 });
 
 export const CreateLessonSchema = LessonBaseSchema.refine(
