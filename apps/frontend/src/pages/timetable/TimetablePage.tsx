@@ -8,7 +8,7 @@ import {
   TIMETABLE_PERIODS,
   WEEKDAY_LABELS,
 } from '@schuladmin/shared';
-import { CalendarDays, Plus, X } from 'lucide-react';
+import { CalendarDays, Plus, X, CalendarRange } from 'lucide-react';
 
 type Slot = {
   id: string;
@@ -59,6 +59,7 @@ function subjectColor(name: string): string {
 export default function TimetablePage() {
   const queryClient = useQueryClient();
   const [classId, setClassId] = useState('');
+  const [showExceptionPanel, setShowExceptionPanel] = useState(false);
   const [exceptionDate, setExceptionDate] = useState('');
   const [editing, setEditing] = useState<(CellTarget & { slot?: Slot; exception?: Exception }) | null>(null);
 
@@ -264,7 +265,7 @@ export default function TimetablePage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-8">
         <CalendarDays className="w-6 h-6 text-brand-red" />
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Stundenplan</h1>
@@ -274,41 +275,71 @@ export default function TimetablePage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-6 items-end">
-        <div className="min-w-[200px]">
-          <label className="block text-xs font-medium text-neutral-600 mb-1">Klasse</label>
-          <select
-            value={classId}
-            onChange={(e) => {
-              setClassId(e.target.value);
-              setExceptionDate('');
-              closeEditor();
-            }}
-            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-          >
-            <option value="">Klasse wählen</option>
-            {classes?.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        {classId && (
-          <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">
-              Ausnahme für Datum (optional)
-            </label>
-            <input
-              type="date"
-              value={exceptionDate}
-              onChange={(e) => setExceptionDate(e.target.value)}
-              className="px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-            />
-          </div>
-        )}
+      {/* Primäre Kontrolle: Klasse */}
+      <div className="mb-6 max-w-md">
+        <label className="block text-sm font-semibold text-neutral-800 mb-2">Klasse auswählen</label>
+        <select
+          value={classId}
+          onChange={(e) => {
+            setClassId(e.target.value);
+            setExceptionDate('');
+            setShowExceptionPanel(false);
+            closeEditor();
+          }}
+          className="w-full px-4 py-3 border-2 border-neutral-300 rounded-xl text-base font-medium bg-white shadow-sm focus:outline-none focus:border-neutral-500 focus:ring-0"
+        >
+          <option value="">— Klasse wählen —</option>
+          {classes?.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
       </div>
 
+      {/* Ausnahme: sekundär, erst auf Wunsch */}
+      {classId && (
+        <div className="mb-6">
+          {!showExceptionPanel ? (
+            <button
+              type="button"
+              onClick={() => setShowExceptionPanel(true)}
+              className="inline-flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700 transition-colors"
+            >
+              <CalendarRange className="w-4 h-4" />
+              Ausnahme für ein einzelnes Datum erfassen…
+            </button>
+          ) : (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-4 py-3 max-w-md">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-neutral-600 uppercase tracking-wide">
+                  Ausnahme (optional)
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExceptionPanel(false);
+                    setExceptionDate('');
+                  }}
+                  className="text-xs text-neutral-400 hover:text-neutral-600"
+                >
+                  Schliessen
+                </button>
+              </div>
+              <p className="text-xs text-neutral-500 mb-2">
+                Nur nötig bei Stellvertretung, Verschiebung oder Ausfall – die Wochenvorlage bleibt unverändert.
+              </p>
+              <input
+                type="date"
+                value={exceptionDate}
+                onChange={(e) => setExceptionDate(e.target.value)}
+                className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white text-neutral-700 focus:outline-none focus:border-neutral-400"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {!classId && (
-        <div className="bg-white rounded-xl border border-neutral-200 p-10 text-center text-neutral-500">
+        <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50/50 p-12 text-center text-neutral-500">
           Bitte zuerst eine Klasse auswählen, um den Stundenplan anzuzeigen oder zu bearbeiten.
         </div>
       )}
@@ -320,33 +351,33 @@ export default function TimetablePage() {
       {classId && !isLoading && (
         <>
           {isExceptionMode && (
-            <div className="mb-3 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2">
+            <div className="mb-4 text-sm bg-amber-50/80 border border-amber-200/80 text-amber-900 rounded-lg px-3 py-2">
               Ausnahme-Modus für {exceptionDate} ({WEEKDAY_LABELS[exceptionDayOfWeek!]}) –
-              Änderungen betreffen nur dieses Datum, nicht die Wochenvorlage.
+              Änderungen betreffen nur dieses Datum.
             </div>
           )}
           {exceptionDate && exceptionDayOfWeek === null && (
-            <div className="mb-3 text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
+            <div className="mb-4 text-sm bg-neutral-100 border border-neutral-200 text-neutral-600 rounded-lg px-3 py-2">
               Ausnahmen sind nur für Werktage (Mo–Fr) möglich.
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-neutral-200 overflow-x-auto">
+          <div className="rounded-xl border border-neutral-200 bg-white overflow-x-auto shadow-sm">
             <table className="w-full min-w-[720px] border-collapse text-sm">
               <thead>
-                <tr className="bg-neutral-50">
-                  <th className="p-2 text-left text-xs text-neutral-500 font-medium w-28 border-b">
+                <tr>
+                  <th className="sticky left-0 z-10 p-3 text-left text-[11px] font-medium text-neutral-400 uppercase tracking-wider w-[7.5rem] bg-neutral-100 border-b border-r border-neutral-200">
                     Periode
                   </th>
                   {[1, 2, 3, 4, 5].map((d) => (
                     <th
                       key={d}
-                      className={`p-2 text-center text-xs font-semibold border-b ${
+                      className={`p-3 text-center text-xs font-medium border-b border-neutral-200 ${
                         isExceptionMode && exceptionDayOfWeek === d
-                          ? 'bg-amber-50 text-amber-900'
+                          ? 'bg-amber-50/60 text-amber-800'
                           : isExceptionMode
-                            ? 'text-neutral-300'
-                            : 'text-neutral-700'
+                            ? 'bg-white text-neutral-300'
+                            : 'bg-white text-neutral-500'
                       }`}
                     >
                       {WEEKDAY_LABELS[d]}
@@ -358,19 +389,19 @@ export default function TimetablePage() {
                 {TIMETABLE_PERIODS.map((period) => (
                   <Fragment key={period.period}>
                     {(period.period === 3 || period.period === 5 || period.period === 7) && (
-                      <tr className="bg-neutral-50/80">
+                      <tr>
                         <td
                           colSpan={6}
-                          className="px-2 py-1 text-[10px] uppercase tracking-wide text-neutral-400 text-center"
+                          className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.15em] text-neutral-400 bg-neutral-100 border-y border-neutral-200"
                         >
-                          {period.period === 5 ? 'Mittagspause' : 'Pause'}
+                          {period.period === 5 ? '— Mittagspause —' : '— Pause —'}
                         </td>
                       </tr>
                     )}
-                    <tr className="border-b border-neutral-100">
-                      <td className="p-2 align-top">
-                        <div className="font-medium text-neutral-800">{period.label}</div>
-                        <div className="text-[11px] text-neutral-400 font-mono">
+                    <tr className="group/row">
+                      <td className="sticky left-0 z-10 p-3 align-middle bg-neutral-50 border-r border-b border-neutral-200">
+                        <div className="text-xs font-semibold text-neutral-700">{period.label}</div>
+                        <div className="text-[10px] text-neutral-400 font-mono mt-0.5">
                           {period.startTime}–{period.endTime}
                         </div>
                       </td>
@@ -382,6 +413,7 @@ export default function TimetablePage() {
                             : undefined;
                         const dimmed = isExceptionMode && exceptionDayOfWeek !== day;
                         const clickable = !dimmed;
+                        const hasContent = Boolean(slot || ex);
 
                         let displayName = slot?.subject?.name;
                         let displayTeacher = slot?.teacher
@@ -396,7 +428,7 @@ export default function TimetablePage() {
                           displayName = 'Ausfall';
                           displayTeacher = '';
                           displayRoom = null;
-                          color = 'bg-neutral-100 border-neutral-300 text-neutral-500 line-through';
+                          color = 'bg-neutral-100 border-neutral-200 text-neutral-400';
                         } else if (ex?.type === 'OVERRIDE') {
                           displayName = ex.subject?.name ?? displayName;
                           displayTeacher = ex.teacher
@@ -407,37 +439,37 @@ export default function TimetablePage() {
                         }
 
                         return (
-                          <td key={`${day}-${period.period}`} className="p-1.5 align-top">
+                          <td key={`${day}-${period.period}`} className="p-1.5 align-top border-b border-neutral-100">
                             <button
                               type="button"
                               disabled={!clickable}
                               onClick={() => openCell(day, period.period)}
-                              className={`w-full min-h-[64px] rounded-lg border text-left p-2 transition-all ${
+                              className={`w-full min-h-[68px] rounded-md border text-left p-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 focus-visible:ring-offset-1 ${
                                 dimmed
-                                  ? 'opacity-30 cursor-not-allowed border-dashed border-neutral-200'
-                                  : slot || ex
-                                    ? `${color} hover:ring-2 hover:ring-brand-red/30`
-                                    : 'border-dashed border-neutral-300 hover:border-brand-red hover:bg-red-50/40'
+                                  ? 'opacity-25 cursor-not-allowed border-neutral-100 bg-neutral-50/50'
+                                  : hasContent
+                                    ? `${color} border hover:brightness-[0.98]`
+                                    : 'border-neutral-200 bg-neutral-50/40 hover:bg-neutral-100/80 hover:border-neutral-300'
                               }`}
                             >
-                              {slot || ex ? (
+                              {hasContent ? (
                                 <div className="space-y-0.5">
-                                  <div className="font-semibold text-xs leading-tight">
+                                  <div className={`font-semibold text-xs leading-tight ${cancelled ? 'line-through' : ''}`}>
                                     {displayName}
                                     {(slot?.isTest || ex?.isTest) && !cancelled && (
-                                      <span className="ml-1 text-[9px] font-bold uppercase">Test</span>
+                                      <span className="ml-1 text-[9px] font-bold uppercase opacity-70">Test</span>
                                     )}
                                   </div>
                                   {displayTeacher && (
-                                    <div className="text-[10px] opacity-80 truncate">{displayTeacher}</div>
+                                    <div className="text-[10px] opacity-75 truncate">{displayTeacher}</div>
                                   )}
                                   {displayRoom && (
-                                    <div className="text-[10px] opacity-70">Raum {displayRoom}</div>
+                                    <div className="text-[10px] opacity-60">Raum {displayRoom}</div>
                                   )}
                                 </div>
                               ) : (
-                                <div className="flex items-center justify-center h-full text-neutral-400">
-                                  <Plus className="w-4 h-4" />
+                                <div className="flex items-center justify-center h-full min-h-[52px] text-neutral-300">
+                                  <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
                                 </div>
                               )}
                             </button>
