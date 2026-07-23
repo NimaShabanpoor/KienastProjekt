@@ -14,6 +14,7 @@ interface AbsenceStats {
 }
 
 export default function ExportsPage() {
+  const [gradesClassId, setGradesClassId] = useState('');
   const [promoClassId, setPromoClassId] = useState('');
   const [schoolYear, setSchoolYear] = useState('2024/25');
 
@@ -93,8 +94,26 @@ export default function ExportsPage() {
             <div className="p-2 bg-green-50 rounded-lg"><BarChart2 className="w-4 h-4 text-green-600" /></div>
             <h3 className="font-semibold text-neutral-900">Noten (CSV)</h3>
           </div>
-          <p className="text-sm text-neutral-500 mb-4">Notenliste als CSV-Datei</p>
-          <button onClick={() => void handleExport('/api/v1/exports/grades/excel', 'noten.csv')} className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark">
+          <p className="text-sm text-neutral-500 mb-4">Alle Noten einer Klasse mit Name, Fach und Note</p>
+          <select
+            value={gradesClassId}
+            onChange={(e) => setGradesClassId(e.target.value)}
+            className="w-full mb-3 px-2 py-1.5 border rounded-lg text-sm"
+          >
+            <option value="">Klasse wählen</option>
+            {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button
+            disabled={!gradesClassId}
+            onClick={() => {
+              const className = classes?.find((c) => c.id === gradesClassId)?.name ?? 'klasse';
+              void handleExport(
+                `/api/v1/exports/grades/excel?classId=${gradesClassId}`,
+                `noten-${className}.csv`
+              );
+            }}
+            className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark disabled:opacity-50"
+          >
             <Download className="w-4 h-4" /> CSV exportieren
           </button>
         </div>

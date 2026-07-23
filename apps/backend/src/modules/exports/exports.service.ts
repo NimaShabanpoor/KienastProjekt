@@ -44,14 +44,20 @@ export async function exportAbsencesCsv(): Promise<string> {
   );
 }
 
-export async function exportGradesCsv(): Promise<string> {
+export async function exportGradesCsv(classId: string): Promise<string> {
   const grades = await prisma.grade.findMany({
+    where: { student: { classId } },
     include: {
       student: { include: { class: { select: { name: true } } } },
       subject: { select: { name: true } },
       category: { select: { name: true } },
     },
-    orderBy: [{ date: 'desc' }],
+    orderBy: [
+      { student: { lastName: 'asc' } },
+      { student: { firstName: 'asc' } },
+      { subject: { name: 'asc' } },
+      { date: 'desc' },
+    ],
   });
 
   return toCsv(

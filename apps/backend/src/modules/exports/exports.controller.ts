@@ -16,9 +16,14 @@ export const absencesCsv = async (_req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 };
 
-export const gradesCsv = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const gradesCsv = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const csv = await exportsService.exportGradesCsv();
+    const classId = req.query['classId'] as string;
+    if (!classId) {
+      res.status(400).json({ error: 'classId erforderlich.', code: 'MISSING_PARAMS' });
+      return;
+    }
+    const csv = await exportsService.exportGradesCsv(classId);
     sendCsv(res, 'noten.csv', csv);
   } catch (err) { next(err); }
 };
