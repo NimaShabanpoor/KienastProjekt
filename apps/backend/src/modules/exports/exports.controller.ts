@@ -15,10 +15,32 @@ function sendPdf(res: Response, filename: string, buffer: Buffer): void {
   res.send(buffer);
 }
 
+function sendExcel(res: Response, filename: string, buffer: Buffer): void {
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
+}
+
 export const absencesCsv = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const csv = await exportsService.exportAbsencesCsv();
     sendCsv(res, 'absenzen.csv', csv);
+  } catch (err) { next(err); }
+};
+
+export const gradesExcel = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const classId = req.query['classId'] as string;
+    if (!classId) {
+      res.status(400).json({ error: 'classId erforderlich.', code: 'MISSING_PARAMS' });
+      return;
+    }
+    const { buffer, className } = await exportsService.exportGradesExcel(classId);
+    const safeName = className.replace(/[^\w\-äöüÄÖÜß]+/gi, '_');
+    sendExcel(res, `noten-${safeName}.xlsx`, buffer);
   } catch (err) { next(err); }
 };
 

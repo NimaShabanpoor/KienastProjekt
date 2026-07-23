@@ -1,22 +1,24 @@
-// Export-Service: CSV-/PDF-Berichte für den Leiter
+// Export-Service: CSV-/Excel-/PDF-Berichte für den Leiter
+// CSV nutzt Semikolon – Standard für Excel in DE/CH
 
 import PDFDocument from 'pdfkit';
+import * as XLSX from 'xlsx';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import * as gradesService from '../grades/grades.service';
 
 function escapeCsv(value: string | number | null | undefined): string {
   const str = value == null ? '' : String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+  if (str.includes(';') || str.includes('"') || str.includes('\n')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 }
 
 function toCsv(headers: string[], rows: (string | number | null | undefined)[][]): string {
-  const lines = [headers.join(',')];
+  const lines = [headers.join(';')];
   for (const row of rows) {
-    lines.push(row.map(escapeCsv).join(','));
+    lines.push(row.map(escapeCsv).join(';'));
   }
   return lines.join('\n');
 }
@@ -44,6 +46,62 @@ export async function exportAbsencesCsv(): Promise<string> {
       `${a.recordedBy.lastName}, ${a.recordedBy.firstName}`,
     ])
   );
+}
+
+export async function exportGradesExcel(classId: string): Promise<{ buffer: Buffer; className: string }> {
+  const classRecord = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { name: true },
+  });
+  if (!classRecord) {
+    throw new ApiError('Klasse nicht gefunden.', 'CLASS_NOT_FOUND', 404);
+  }
+
+  const grades = await prisma.grade.findMany({
+    where: { student: { classId } },
+    include: {
+      student: { select: { firstName: true, lastName: true } },
+      subject: { select: { name: true } },
+      category: { select: { name: true } },
+    },
+    orderBy: [
+      { student: { lastName: 'asc' } },
+      { student: { firstName: 'asc' } },
+      { subject: { name: 'asc' } },
+      { date: 'desc' },
+    ],
+  });
+
+  const rows = grades.map((g) => ({
+    Datum: g.date.toISOString().split('T')[0],
+    Klasse: classRecord.name,
+    Schüler: `${g.student.lastName}, ${g.student.firstName}`,
+    Fach: g.subject.name,
+    Kategorie: g.category.name,
+    Note: g.value,
+    Beschreibung: g.description ?? '',
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(
+    rows.length > 0
+      ? rows
+      : [{ Datum: '', Klasse: classRecord.name, Schüler: '', Fach: '', Kategorie: '', Note: '', Beschreibung: '' }]
+  );
+  worksheet['!cols'] = [
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 8 },
+    { wch: 28 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Noten');
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+
+  return { buffer, className: classRecord.name };
 }
 
 export async function exportGradesPdf(classId: string): Promise<{ buffer: Buffer; className: string }> {
