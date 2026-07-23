@@ -37,13 +37,17 @@ export default function ExportsPage() {
   const handleExport = async (endpoint: string, filename: string): Promise<void> => {
     try {
       const response = await apiClient.get(endpoint, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([response.data as BlobPart]));
+      const isPdf = filename.toLowerCase().endsWith('.pdf');
+      const url = window.URL.createObjectURL(
+        new Blob([response.data as BlobPart], { type: isPdf ? 'application/pdf' : 'text/csv' })
+      );
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
     } catch {
       alert('Export fehlgeschlagen. Bitte versuche es erneut.');
     }
@@ -92,7 +96,7 @@ export default function ExportsPage() {
         <div className="bg-white rounded-xl border border-neutral-200 p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-green-50 rounded-lg"><BarChart2 className="w-4 h-4 text-green-600" /></div>
-            <h3 className="font-semibold text-neutral-900">Noten (CSV)</h3>
+            <h3 className="font-semibold text-neutral-900">Noten (PDF)</h3>
           </div>
           <p className="text-sm text-neutral-500 mb-4">Alle Noten einer Klasse mit Name, Fach und Note</p>
           <select
@@ -108,13 +112,13 @@ export default function ExportsPage() {
             onClick={() => {
               const className = classes?.find((c) => c.id === gradesClassId)?.name ?? 'klasse';
               void handleExport(
-                `/api/v1/exports/grades/excel?classId=${gradesClassId}`,
-                `noten-${className}.csv`
+                `/api/v1/exports/grades/pdf?classId=${gradesClassId}`,
+                `noten-${className}.pdf`
               );
             }}
             className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark disabled:opacity-50"
           >
-            <Download className="w-4 h-4" /> CSV exportieren
+            <Download className="w-4 h-4" /> PDF exportieren
           </button>
         </div>
 

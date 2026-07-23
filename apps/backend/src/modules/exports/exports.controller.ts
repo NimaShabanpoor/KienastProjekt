@@ -9,6 +9,12 @@ function sendCsv(res: Response, filename: string, content: string): void {
   res.send('\uFEFF' + content);
 }
 
+function sendPdf(res: Response, filename: string, buffer: Buffer): void {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
+}
+
 export const absencesCsv = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const csv = await exportsService.exportAbsencesCsv();
@@ -16,15 +22,16 @@ export const absencesCsv = async (_req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 };
 
-export const gradesCsv = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const gradesPdf = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const classId = req.query['classId'] as string;
     if (!classId) {
       res.status(400).json({ error: 'classId erforderlich.', code: 'MISSING_PARAMS' });
       return;
     }
-    const csv = await exportsService.exportGradesCsv(classId);
-    sendCsv(res, 'noten.csv', csv);
+    const { buffer, className } = await exportsService.exportGradesPdf(classId);
+    const safeName = className.replace(/[^\w\-äöüÄÖÜß]+/gi, '_');
+    sendPdf(res, `noten-${safeName}.pdf`, buffer);
   } catch (err) { next(err); }
 };
 

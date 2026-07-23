@@ -9,7 +9,7 @@ const router = Router();
 router.use(authMiddleware, adminOnly);
 
 router.get('/absences/csv', exportsController.absencesCsv);
-router.get('/grades/excel', exportsController.gradesCsv);
+router.get('/grades/pdf', exportsController.gradesPdf);
 router.get('/statistics/promotion', exportsController.promotionCsv);
 router.get('/audit-log', exportsController.auditLogCsv);
 
