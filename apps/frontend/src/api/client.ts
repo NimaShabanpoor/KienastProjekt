@@ -1,7 +1,7 @@
 // Axios-Client mit automatischem Token-Refresh
 // Interceptors für Auth-Header und 401-Behandlung
 
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/authStore';
 
 export const apiClient = axios.create({
@@ -12,6 +12,8 @@ export const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+type RetryableRequest = InternalAxiosRequestConfig & { _retry?: boolean };
 
 const AUTH_PATHS = ['/api/v1/auth/login', '/api/v1/auth/2fa/verify', '/api/v1/auth/refresh'];
 
@@ -42,14 +44,15 @@ apiClient.interceptors.response.use(
   async (error: unknown) => {
     if (!axios.isAxiosError(error)) return Promise.reject(error);
 
-    const originalRequest = error.config;
+    const originalRequest = error.config as RetryableRequest | undefined;
     const status = error.response?.status;
 
     // Kein Token-Refresh bei Login/2FA – sonst 401-Kaskade in der Konsole
+    // _retry ist nur ein lokales Config-Flag, KEIN HTTP-Header (sonst CORS-Fehler)
     if (
       status === 401 &&
       originalRequest &&
-      !originalRequest.headers['_retry'] &&
+      !originalRequest._retry &&
       !isAuthRequest(originalRequest.url)
     ) {
       if (isRefreshing) {
@@ -64,7 +67,7 @@ apiClient.interceptors.response.use(
         });
       }
 
-      originalRequest.headers['_retry'] = 'true';
+      originalRequest._retry = true;
       isRefreshing = true;
 
       try {

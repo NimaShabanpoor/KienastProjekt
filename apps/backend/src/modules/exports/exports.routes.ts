@@ -9,6 +9,7 @@ const router = Router();
 router.use(authMiddleware, adminOnly);
 
 router.get('/absences/excel', exportsController.absencesExcel);
+router.get('/absences/csv', exportsController.absencesExcel); // Alias für ältere Clients
 router.get('/grades/excel', exportsController.gradesExcel);
 router.get('/grades/pdf', exportsController.gradesPdf);
 router.get('/statistics/promotion', exportsController.promotionCsv);
