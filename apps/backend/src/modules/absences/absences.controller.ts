@@ -27,6 +27,7 @@ export const createBatch = async (req: Request, res: Response, next: NextFunctio
         status: 'ANWESEND' | 'ENTSCHULDIGT' | 'UNENTSCHULDIGT';
         note?: string | null;
         absentLessonCount?: number;
+        presentLessonCount?: number;
       }>;
     };
     const lessonIds = body.lessonIds ?? (body.lessonId ? [body.lessonId] : []);

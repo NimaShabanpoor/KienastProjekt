@@ -108,45 +108,70 @@ export default function TimetablePage() {
           className="bg-white rounded-xl border border-neutral-200 p-5 mb-6 space-y-4"
         >
           <h2 className="font-semibold">Neue Lektion</h2>
+          <p className="text-sm text-neutral-500">
+            Bei mehreren Lektionen (z.&nbsp;B. Mathematik Doppelstunde) Anzahl erhöhen – es werden
+            nacheinander einzelne Lektionen angelegt.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <select required value={classId} onChange={(e) => { setClassId(e.target.value); setSubjectId(''); }} className="px-3 py-2 border rounded-lg text-sm">
-              <option value="">Klasse</option>
-              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <select required value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" disabled={!classId}>
-              <option value="">Fach</option>
-              {subjects?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" />
             <div>
-              <label className="block text-xs text-neutral-500 mb-1">Start (1. Lektion)</label>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Klasse</label>
+              <select required value={classId} onChange={(e) => { setClassId(e.target.value); setSubjectId(''); }} className="w-full px-3 py-2 border rounded-lg text-sm">
+                <option value="">Klasse wählen</option>
+                {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Fach</label>
+              <select required value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" disabled={!classId}>
+                <option value="">Fach wählen</option>
+                {subjects?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Datum</label>
+              <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Start (1. Lektion)</label>
               <input required type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
             </div>
             <div>
-              <label className="block text-xs text-neutral-500 mb-1">Ende (1. Lektion)</label>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Ende (1. Lektion)</label>
               <input required type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
             </div>
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">Anzahl Lektionen</label>
-              <input
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <label className="block text-xs font-semibold text-amber-900 mb-1">
+                Anzahl Lektionen
+              </label>
+              <select
                 required
-                type="number"
-                min={1}
-                max={8}
                 value={lessonCount}
-                onChange={(e) => setLessonCount(Math.min(8, Math.max(1, Number(e.target.value) || 1)))}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-              />
+                onChange={(e) => setLessonCount(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white font-medium"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                  <option key={n} value={n}>
+                    {n === 1 ? '1 Lektion' : `${n} Lektionen`}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-amber-800 mt-1.5">
+                z.&nbsp;B. 2 = Doppelstunde (zwei Einträge hintereinander)
+              </p>
             </div>
-            <input value={room} onChange={(e) => setRoom(e.target.value)} placeholder="Raum" className="px-3 py-2 border rounded-lg text-sm" />
-            <label className="flex items-center gap-2 text-sm text-neutral-700 px-1">
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Raum (optional)</label>
+              <input value={room} onChange={(e) => setRoom(e.target.value)} placeholder="Raum" className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-neutral-700 px-1 sm:col-span-2">
               <input type="checkbox" checked={isTest} onChange={(e) => setIsTest(e.target.checked)} className="rounded" />
               Test / Prüfung (Arztzeugnis bei Absenz)
             </label>
           </div>
           {lessonCount > 1 && (
-            <p className="text-xs text-neutral-500">
-              Es werden {lessonCount} aufeinanderfolgende Lektionen angelegt (je mit der Dauer von Start bis Ende).
+            <p className="text-sm text-neutral-600 bg-neutral-50 rounded-lg px-3 py-2">
+              Es werden <strong>{lessonCount} Lektionen</strong> angelegt. Der Lehrer kann später
+              pro Schüler wählen: 0, 1, … oder {lessonCount} Lektionen anwesend.
             </p>
           )}
           <button type="submit" disabled={createMutation.isPending} className="bg-brand-red text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">

@@ -7,8 +7,8 @@ export const AbsenceEntrySchema = z.object({
   studentId: z.string().cuid('Ungültige Schüler-ID'),
   status: z.nativeEnum(AbsenceStatus),
   note: z.string().max(500).optional().nullable(),
-  /** Bei Abwesend: wie viele der ausgewählten Lektionen betroffen sind */
   absentLessonCount: z.coerce.number().int().min(1).max(20).optional(),
+  presentLessonCount: z.coerce.number().int().min(0).max(20).optional(),
 });
 
 export const CreateAbsenceBatchBodySchema = z

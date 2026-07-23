@@ -9,6 +9,7 @@ export const AbsenceEntrySchema = z.object({
   status: z.nativeEnum(AbsenceStatus),
   note: z.string().max(500).optional().nullable(),
   absentLessonCount: z.coerce.number().int().min(1).max(20).optional(),
+  presentLessonCount: z.coerce.number().int().min(0).max(20).optional(),
 });
 
 export type AbsenceEntryInput = z.infer<typeof AbsenceEntrySchema>;

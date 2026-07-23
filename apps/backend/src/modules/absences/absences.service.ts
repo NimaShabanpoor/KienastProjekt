@@ -19,7 +19,10 @@ interface AbsenceEntry {
   studentId: string;
   status: AbsenceStatus;
   note?: string | null;
+  /** Wie viele der ausgewählten Lektionen der Schüler abwesend war (ältere Clients) */
   absentLessonCount?: number;
+  /** Wie viele der ausgewählten Lektionen der Schüler anwesend war (bevorzugt) */
+  presentLessonCount?: number;
 }
 
 // --------------------------------------------------------
@@ -138,28 +141,23 @@ export async function createAbsenceBatch(
   const ops = [];
 
   for (const entry of entries) {
-    const absentCount =
-      entry.status === AbsenceStatus.ANWESEND
-        ? 0
-        : Math.min(
-            entry.absentLessonCount ?? sortedLessonIds.length,
-            sortedLessonIds.length
-          );
+    const total = sortedLessonIds.length;
+    let presentCount: number;
 
-    if (entry.status !== AbsenceStatus.ANWESEND && absentCount < 1) {
-      throw new ApiError(
-        'Bei Abwesenheit muss mindestens 1 Lektion angegeben werden.',
-        'INVALID_LESSON_COUNT',
-        400
-      );
+    if (typeof entry.presentLessonCount === 'number') {
+      presentCount = Math.min(Math.max(entry.presentLessonCount, 0), total);
+    } else if (entry.status === AbsenceStatus.ANWESEND) {
+      presentCount = total;
+    } else {
+      const absentCount = Math.min(entry.absentLessonCount ?? total, total);
+      presentCount = total - absentCount;
     }
 
-    for (let i = 0; i < sortedLessonIds.length; i++) {
+    for (let i = 0; i < total; i++) {
       const lessonId = sortedLessonIds[i]!;
+      // Erste presentCount Lektionen = anwesend, Rest = unentschuldigt abwesend
       const statusForLesson =
-        entry.status === AbsenceStatus.ANWESEND || i >= absentCount
-          ? AbsenceStatus.ANWESEND
-          : entry.status;
+        i < presentCount ? AbsenceStatus.ANWESEND : AbsenceStatus.UNENTSCHULDIGT;
 
       ops.push(
         prisma.absence.upsert({

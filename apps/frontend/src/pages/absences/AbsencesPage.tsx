@@ -1,5 +1,5 @@
 // Absenzen-Erfassungsseite (Lehrer)
-// Anwesend/Abwesend inkl. Anzahl fehlender Lektionen – Entschuldigung durch Leiter
+// Pro Schüler: Dropdown «X von N Lektionen anwesend»
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,18 +7,27 @@ import { apiClient } from '../../api/client';
 import type { Lesson, Student } from '@schuladmin/shared';
 import { AbsenceStatus } from '@schuladmin/shared';
 import { usePermissions } from '../../hooks/usePermissions';
-import { CheckCircle2, XCircle } from 'lucide-react';
 
-type StudentAttendance = {
-  present: boolean;
-  absentLessonCount: number;
+type LessonBlock = {
+  key: string;
+  subjectName: string;
+  classId: string;
+  className: string;
+  lessons: Lesson[];
 };
+
+function lessonLabel(count: number): string {
+  if (count === 0) return '0 Lektionen anwesend';
+  if (count === 1) return '1 Lektion anwesend';
+  return `${count} Lektionen anwesend`;
+}
 
 export default function AbsencesPage() {
   const queryClient = useQueryClient();
   const { isTeacher } = usePermissions();
-  const [selectedLessonIds, setSelectedLessonIds] = useState<string[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, StudentAttendance>>({});
+  const [selectedBlockKey, setSelectedBlockKey] = useState('');
+  /** studentId → Anzahl Lektionen anwesend */
+  const [presentCounts, setPresentCounts] = useState<Record<string, number>>({});
 
   const today = new Date().toISOString().split('T')[0]!;
 
@@ -34,91 +43,71 @@ export default function AbsencesPage() {
     },
   });
 
-  const selectedLessons = useMemo(
-    () => (lessons ?? []).filter((l) => selectedLessonIds.includes(l.id)),
-    [lessons, selectedLessonIds]
-  );
+  const blocks = useMemo((): LessonBlock[] => {
+    const map = new Map<string, LessonBlock>();
+    for (const lesson of lessons ?? []) {
+      const classId = lesson.subject?.class?.id ?? 'unknown';
+      const subjectId = lesson.subjectId;
+      const key = `${classId}:${subjectId}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.lessons.push(lesson);
+      } else {
+        map.set(key, {
+          key,
+          subjectName: lesson.subject?.name ?? 'Fach',
+          classId,
+          className: lesson.subject?.class?.name ?? '–',
+          lessons: [lesson],
+        });
+      }
+    }
+    return [...map.values()].map((b) => ({
+      ...b,
+      lessons: [...b.lessons].sort((a, c) => a.startTime.localeCompare(c.startTime)),
+    }));
+  }, [lessons]);
 
-  const selectedClassId = selectedLessons[0]?.subject?.class?.id;
+  const selectedBlock = blocks.find((b) => b.key === selectedBlockKey);
+  const lessonIds = selectedBlock?.lessons.map((l) => l.id) ?? [];
+  const maxLessons = lessonIds.length;
 
   const { data: students } = useQuery({
-    queryKey: ['students', selectedClassId],
+    queryKey: ['students', selectedBlock?.classId],
     queryFn: async () => {
       const { data } = await apiClient.get<{ data: Student[] }>(
-        `/api/v1/students?classId=${selectedClassId}`
+        `/api/v1/students?classId=${selectedBlock!.classId}`
       );
       return data.data;
     },
-    enabled: !!selectedClassId,
+    enabled: !!selectedBlock?.classId,
   });
 
-  const maxLessons = selectedLessonIds.length;
-
-  const toggleLesson = (lessonId: string, classId: string | undefined): void => {
-    setSelectedLessonIds((prev) => {
-      const already = prev.includes(lessonId);
-      if (already) {
-        const next = prev.filter((id) => id !== lessonId);
-        setAttendance((att) => {
-          const updated: Record<string, StudentAttendance> = {};
-          for (const [sid, val] of Object.entries(att)) {
-            updated[sid] = {
-              ...val,
-              absentLessonCount: Math.min(val.absentLessonCount, Math.max(next.length, 1)),
-            };
-          }
-          return updated;
-        });
-        return next;
-      }
-
-      // Nur Lektionen derselben Klasse mischen
-      const firstSelected = lessons?.find((l) => prev[0] === l.id);
-      if (prev.length > 0 && firstSelected?.subject?.class?.id !== classId) {
-        alert('Bitte nur Lektionen derselben Klasse auswählen.');
-        return prev;
-      }
-
-      return [...prev, lessonId];
-    });
-  };
-
-  const setPresent = (studentId: string, present: boolean): void => {
-    setAttendance((prev) => ({
+  const setPresentCount = (studentId: string, count: number): void => {
+    setPresentCounts((prev) => ({
       ...prev,
-      [studentId]: {
-        present,
-        absentLessonCount: prev[studentId]?.absentLessonCount ?? Math.max(maxLessons, 1),
-      },
-    }));
-  };
-
-  const setAbsentCount = (studentId: string, count: number): void => {
-    const clamped = Math.min(Math.max(count, 1), Math.max(maxLessons, 1));
-    setAttendance((prev) => ({
-      ...prev,
-      [studentId]: { present: false, absentLessonCount: clamped },
+      [studentId]: Math.min(Math.max(count, 0), maxLessons),
     }));
   };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (selectedLessonIds.length === 0) {
-        throw new Error('Keine Lektion ausgewählt');
+      if (!selectedBlock || lessonIds.length === 0) {
+        throw new Error('Keine Lektionen ausgewählt');
       }
       const entries = (students ?? []).map((s) => {
-        const row = attendance[s.id] ?? { present: true, absentLessonCount: maxLessons };
-        if (row.present) {
-          return { studentId: s.id, status: AbsenceStatus.ANWESEND };
-        }
+        const presentLessonCount = presentCounts[s.id] ?? maxLessons;
         return {
           studentId: s.id,
-          status: AbsenceStatus.UNENTSCHULDIGT,
-          absentLessonCount: row.absentLessonCount,
+          status:
+            presentLessonCount === maxLessons
+              ? AbsenceStatus.ANWESEND
+              : AbsenceStatus.UNENTSCHULDIGT,
+          presentLessonCount,
         };
       });
       await apiClient.post('/api/v1/absences', {
-        lessonIds: selectedLessonIds,
+        lessonIds,
         absences: entries,
       });
     },
@@ -146,59 +135,47 @@ export default function AbsencesPage() {
     <div className="p-4 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold text-neutral-900 mb-1">Anwesenheit erfassen</h1>
       <p className="text-sm text-neutral-500 mb-4">
-        Wähle die Lektionen und trage pro Schüler Anwesend oder Abwesend inkl. Anzahl Lektionen ein.
+        Wähle das Fach / den Block und gib pro Schüler an, in wie vielen Lektionen er anwesend war.
       </p>
 
       <div className="mb-6">
         <label className="block text-sm font-medium text-neutral-700 mb-2">
-          Lektionen auswählen (heute)
+          Fach / Lektionsblock (heute)
         </label>
-        <div className="space-y-2 bg-white rounded-xl border border-neutral-200 p-3">
-          {(lessons ?? []).length === 0 && (
-            <p className="text-sm text-amber-600">
-              Keine Lektionen für heute – der Leiter muss den Stundenplan pflegen.
-            </p>
-          )}
-          {(lessons ?? []).map((lesson) => {
-            const checked = selectedLessonIds.includes(lesson.id);
-            const className = lesson.subject?.class?.name ?? '–';
-            return (
-              <label
-                key={lesson.id}
-                className="flex items-start gap-3 p-2 rounded-lg hover:bg-neutral-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleLesson(lesson.id, lesson.subject?.class?.id)}
-                  className="mt-1"
-                />
-                <span className="text-sm text-neutral-800">
-                  <span className="font-medium">{lesson.subject?.name}</span>
-                  {' · '}
-                  {lesson.startTime}–{lesson.endTime}
-                  {' · '}
-                  Klasse {className}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-        {maxLessons > 0 && (
+        <select
+          value={selectedBlockKey}
+          onChange={(e) => {
+            setSelectedBlockKey(e.target.value);
+            setPresentCounts({});
+          }}
+          className="w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
+        >
+          <option value="">-- Block auswählen --</option>
+          {blocks.map((block) => (
+            <option key={block.key} value={block.key}>
+              {block.subjectName} · Klasse {block.className} · {block.lessons.length}{' '}
+              Lektion{block.lessons.length === 1 ? '' : 'en'} (
+              {block.lessons.map((l) => `${l.startTime}–${l.endTime}`).join(', ')})
+            </option>
+          ))}
+        </select>
+        {blocks.length === 0 && (
+          <p className="text-sm text-amber-600 mt-2">
+            Keine Lektionen für heute – der Leiter muss den Stundenplan pflegen.
+          </p>
+        )}
+        {selectedBlock && (
           <p className="text-xs text-neutral-500 mt-2">
-            {maxLessons} Lektion{maxLessons === 1 ? '' : 'en'} ausgewählt
+            Für diesen Block: {maxLessons} Lektion{maxLessons === 1 ? '' : 'en'}. Pro Schüler wählst
+            du, wie viele davon anwesend waren (z.&nbsp;B. 1 von 2 = erste Lektion da, zweite nicht).
           </p>
         )}
       </div>
 
-      {selectedClassId && students && (
+      {selectedBlock && students && (
         <div className="space-y-3">
           {students.map((student) => {
-            const row = attendance[student.id] ?? {
-              present: true,
-              absentLessonCount: maxLessons,
-            };
-            const isPresent = row.present;
+            const presentCount = presentCounts[student.id] ?? maxLessons;
             return (
               <div
                 key={student.id}
@@ -207,49 +184,21 @@ export default function AbsencesPage() {
                 <p className="font-medium text-neutral-900 mb-3">
                   {student.lastName}, {student.firstName}
                 </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPresent(student.id, true)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] ${
-                      isPresent
-                        ? 'bg-green-500 text-white'
-                        : 'bg-white border border-neutral-300 text-neutral-600 hover:bg-green-50'
-                    }`}
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Anwesend
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPresent(student.id, false)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] ${
-                      !isPresent
-                        ? 'bg-red-500 text-white'
-                        : 'bg-white border border-neutral-300 text-neutral-600 hover:bg-red-50'
-                    }`}
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Abwesend
-                  </button>
-                </div>
-
-                {!isPresent && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <label className="text-sm text-neutral-600 whitespace-nowrap">
-                      Anzahl Lektionen fehlend
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={maxLessons}
-                      value={row.absentLessonCount}
-                      onChange={(e) => setAbsentCount(student.id, Number(e.target.value))}
-                      className="w-20 px-2 py-1.5 border border-neutral-300 rounded-lg text-sm text-center"
-                    />
-                    <span className="text-xs text-neutral-500">von {maxLessons}</span>
-                  </div>
-                )}
+                <label className="block text-sm text-neutral-600 mb-1">
+                  Anwesend in wie vielen Lektionen?
+                </label>
+                <select
+                  value={presentCount}
+                  onChange={(e) => setPresentCount(student.id, Number(e.target.value))}
+                  className="w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
+                >
+                  {Array.from({ length: maxLessons + 1 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {lessonLabel(i)}
+                      {i < maxLessons ? ` (von ${maxLessons})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             );
           })}
@@ -270,7 +219,9 @@ export default function AbsencesPage() {
           )}
           {saveMutation.isError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-              <p className="text-red-700 text-sm font-medium">Speichern fehlgeschlagen. Bitte erneut versuchen.</p>
+              <p className="text-red-700 text-sm font-medium">
+                Speichern fehlgeschlagen. Bitte erneut versuchen.
+              </p>
             </div>
           )}
         </div>
