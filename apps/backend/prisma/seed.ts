@@ -16,12 +16,12 @@ async function main(): Promise<void> {
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@itbenedickt.ch' },
-    update: { passwordHash },
+    update: { passwordHash, firstName: 'Frau', lastName: 'Kienast' },
     create: {
       email: 'admin@itbenedickt.ch',
       passwordHash,
       firstName: 'Frau',
-      lastName: 'Kianash',
+      lastName: 'Kienast',
       role: Role.ABTEILUNGSLEITUNG,
     },
   });
