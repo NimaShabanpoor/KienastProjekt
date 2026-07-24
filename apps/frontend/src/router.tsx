@@ -20,6 +20,7 @@ const AbsenceExcusePage = lazy(() => import('./pages/absences/AbsenceExcusePage'
 const GradesPage = lazy(() => import('./pages/grades/GradesPage'));
 const ExportsPage = lazy(() => import('./pages/exports/ExportsPage'));
 const UsersPage = lazy(() => import('./pages/users/UsersPage'));
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 
 function ProtectedRoute({
   children,
@@ -65,6 +66,7 @@ export const router = createBrowserRouter([
       { path: 'grades', element: <GradesPage /> },
       { path: 'users', element: <ProtectedRoute requiredRole={leaderOnly}><UsersPage /></ProtectedRoute> },
       { path: 'exports', element: <ProtectedRoute requiredRole={leaderOnly}><ExportsPage /></ProtectedRoute> },
+      { path: 'profile', element: <ProfilePage /> },
       { path: '403', element: <div className="p-8 text-center"><h1 className="text-2xl font-bold text-red-600">Kein Zugriff</h1><p>Du hast keine Berechtigung für diese Seite.</p></div> },
     ],
   },

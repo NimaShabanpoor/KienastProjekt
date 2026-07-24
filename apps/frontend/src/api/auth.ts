@@ -58,6 +58,18 @@ export const authApi = {
     return data.data;
   },
 
+  changePassword: async (payload: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => {
+    const { data } = await apiClient.post<{ data: { message: string } }>(
+      '/api/v1/auth/change-password',
+      payload
+    );
+    return data.data;
+  },
+
   refresh: async () => {
     const { data } = await apiClient.post<{ data: { accessToken: string } }>(
       '/api/v1/auth/refresh',

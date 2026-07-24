@@ -8,7 +8,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { ROLE_LABELS, AbsenceStatus } from '@schuladmin/shared';
 import type { Absence } from '@schuladmin/shared';
 import { apiClient } from '../api/client';
-import { LayoutDashboard, LogOut, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, AlertCircle, UserRound } from 'lucide-react';
 
 const LEADER_LINKS = [
   { href: '/', label: 'Dashboard' },
@@ -29,11 +29,12 @@ const TEACHER_LINKS = [
 ];
 
 export default function AppShell() {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const { isLeader } = usePermissions();
   const location = useLocation();
   const links = isLeader ? LEADER_LINKS : TEACHER_LINKS;
   const roleLabel = user?.role ? ROLE_LABELS[user.role] : '';
+  const profileActive = location.pathname === '/profile';
 
   const { data: unexcusedCount } = useQuery({
     queryKey: ['unexcused-absence-count'],
@@ -75,19 +76,33 @@ export default function AppShell() {
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-3 shrink-0">
+          <Link
+            to="/profile"
+            className={`flex items-center gap-2.5 shrink-0 rounded-lg px-2 py-1.5 transition-colors ${
+              profileActive
+                ? 'bg-brand-red-light text-brand-red'
+                : 'text-neutral-700 hover:bg-neutral-100'
+            }`}
+            title="Profileinstellungen"
+          >
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-neutral-900">{user?.firstName} {user?.lastName}</p>
-              <p className="text-xs text-neutral-500">{roleLabel}</p>
+              <p className="text-sm font-medium leading-tight">
+                {user?.firstName} {user?.lastName}
+              </p>
+              <p className={`text-xs leading-tight ${profileActive ? 'text-brand-red/80' : 'text-neutral-500'}`}>
+                {roleLabel}
+              </p>
             </div>
-            <button
-              onClick={() => logout()}
-              className="p-2 text-neutral-500 hover:text-brand-red rounded-lg hover:bg-neutral-100"
-              title="Abmelden"
+            <span
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border ${
+                profileActive
+                  ? 'border-brand-red/30 bg-white text-brand-red'
+                  : 'border-neutral-200 bg-neutral-50 text-neutral-600'
+              }`}
             >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+              <UserRound className="w-4 h-4" />
+            </span>
+          </Link>
         </div>
         <nav className="md:hidden flex gap-1 overflow-x-auto px-4 pb-2">
           {links.map((link) => (
@@ -106,6 +121,16 @@ export default function AppShell() {
               )}
             </Link>
           ))}
+          <Link
+            to="/profile"
+            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
+              profileActive
+                ? 'bg-brand-red-light text-brand-red'
+                : 'text-neutral-600 bg-white border border-neutral-200'
+            }`}
+          >
+            Profil
+          </Link>
         </nav>
       </header>
       <main className="max-w-6xl mx-auto">

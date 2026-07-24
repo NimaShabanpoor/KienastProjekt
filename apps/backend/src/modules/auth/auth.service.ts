@@ -306,6 +306,49 @@ export async function getMe(userId: string) {
 }
 
 // --------------------------------------------------------
+// PASSWORT ÄNDERN
+// --------------------------------------------------------
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, deletedAt: null, isActive: true },
+    select: { id: true, passwordHash: true },
+  });
+
+  if (!user) {
+    throw new ApiError('Benutzer nicht gefunden.', 'USER_NOT_FOUND', 404);
+  }
+
+  const currentValid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!currentValid) {
+    throw new ApiError('Aktuelles Passwort ist falsch.', 'INVALID_PASSWORD', 400);
+  }
+
+  const sameAsOld = await bcrypt.compare(newPassword, user.passwordHash);
+  if (sameAsOld) {
+    throw new ApiError(
+      'Das neue Passwort muss sich vom aktuellen unterscheiden.',
+      'PASSWORD_UNCHANGED',
+      400
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      refreshTokenHash: null,
+    },
+  });
+
+  logger.info('Passwort geändert', { userId });
+}
+
+// --------------------------------------------------------
 // HILFSFUNKTIONEN
 // --------------------------------------------------------
 

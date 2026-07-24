@@ -164,3 +164,22 @@ export const getMe = async (
     next(err);
   }
 };
+
+// POST /api/v1/auth/change-password
+export const changePassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+    await authService.changePassword(req.user!.id, currentPassword, newPassword);
+    res.clearCookie('refreshToken', { path: '/api/v1/auth' });
+    res.status(200).json({ data: { message: 'Passwort erfolgreich geändert.' } });
+  } catch (err) {
+    next(err);
+  }
+};

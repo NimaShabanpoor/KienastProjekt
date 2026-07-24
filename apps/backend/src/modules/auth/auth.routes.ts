@@ -11,6 +11,7 @@ import {
   LoginBodySchema,
   TwoFactorVerifyBodySchema,
   TwoFactorConfirmBodySchema,
+  ChangePasswordBodySchema,
 } from './auth.schemas';
 
 const router = Router();
@@ -61,5 +62,12 @@ router.post(
 router.post('/logout', authMiddleware, authController.logout);
 
 router.get('/me', authMiddleware, authController.getMe);
+
+router.post(
+  '/change-password',
+  authMiddleware,
+  validateMiddleware({ body: ChangePasswordBodySchema }),
+  authController.changePassword
+);
 
 export default router;
