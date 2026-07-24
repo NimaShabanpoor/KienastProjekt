@@ -356,37 +356,39 @@ export async function exportTimetablePdf(
     slotMap.set(`${s.dayOfWeek}-${s.period}`, s);
   }
 
-  /** Pastell-Farben pro Fach (Hintergrund + Text) – konsistent über den Plan */
-  const SUBJECT_PALETTE: { bg: string; fg: string; border: string }[] = [
-    { bg: '#DBEAFE', fg: '#1E3A8A', border: '#93C5FD' }, // blau
-    { bg: '#D1FAE5', fg: '#065F46', border: '#6EE7B7' }, // grün
-    { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' }, // amber
-    { bg: '#EDE9FE', fg: '#5B21B6', border: '#C4B5FD' }, // violett
-    { bg: '#FFE4E6', fg: '#9F1239', border: '#FDA4AF' }, // rose
-    { bg: '#CFFAFE', fg: '#155E75', border: '#67E8F9' }, // cyan
-    { bg: '#FFEDD5', fg: '#9A3412', border: '#FDBA74' }, // orange
-    { bg: '#ECFCCB', fg: '#3F6212', border: '#BEF264' }, // lime
-    { bg: '#FCE7F3', fg: '#9D174D', border: '#F9A8D4' }, // pink
-    { bg: '#E0E7FF', fg: '#3730A3', border: '#A5B4FC' }, // indigo
+  /** Kräftige Fachfarben (sichtbare Flächenfüllung, nicht nur Textfarbe) */
+  const SUBJECT_PALETTE: { bg: string; fg: string }[] = [
+    { bg: '#93C5FD', fg: '#1E3A8A' }, // blau
+    { bg: '#86EFAC', fg: '#14532D' }, // grün
+    { bg: '#FCD34D', fg: '#78350F' }, // amber
+    { bg: '#C4B5FD', fg: '#4C1D95' }, // violett
+    { bg: '#FDA4AF', fg: '#881337' }, // rose
+    { bg: '#67E8F9', fg: '#164E63' }, // cyan
+    { bg: '#FDBA74', fg: '#7C2D12' }, // orange
+    { bg: '#BEF264', fg: '#365314' }, // lime
+    { bg: '#F9A8D4', fg: '#831843' }, // pink
+    { bg: '#A5B4FC', fg: '#312E81' }, // indigo
   ];
-
-  function subjectColor(name: string): { bg: string; fg: string; border: string } {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = (hash + name.charCodeAt(i) * (i + 1)) % SUBJECT_PALETTE.length;
-    }
-    return SUBJECT_PALETTE[hash]!;
-  }
 
   const subjectsUsed = [...new Set(slots.map((s) => s.subject.name))].sort((a, b) =>
     a.localeCompare(b, 'de')
   );
+
+  const subjectColorMap = new Map<string, { bg: string; fg: string }>();
+  subjectsUsed.forEach((name, index) => {
+    subjectColorMap.set(name, SUBJECT_PALETTE[index % SUBJECT_PALETTE.length]!);
+  });
+
+  function subjectColor(name: string): { bg: string; fg: string } {
+    return subjectColorMap.get(name) ?? SUBJECT_PALETTE[0]!;
+  }
 
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
       layout: 'landscape',
       margins: { top: 24, bottom: 24, left: 24, right: 24 },
+      autoFirstPage: true,
     });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -397,14 +399,30 @@ export async function exportTimetablePdf(
     const top = doc.page.margins.top;
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const pageBottom = doc.page.height - doc.page.margins.bottom;
-    const GRID = '#64748B';
+    const GRID = '#1E293B';
+    const GRID_W = 1.2;
     const HEADER_BG = '#1F2937';
-    const TIME_BG = '#E5E7EB';
+    const TIME_BG = '#D1D5DB';
     const EMPTY_BG = '#FFFFFF';
-    const BREAK_BG = '#CBD5E1';
+    const BREAK_BG = '#94A3B8';
+
+    /**
+     * Zelle mit Füllung + Rahmen in einem Zug (sichtbares Excel-Gitter).
+     * save/restore hält Farbzustand getrennt vom nachfolgenden Text.
+     */
+    const paintCell = (x: number, yy: number, w: number, h: number, fill: string): void => {
+      doc.save();
+      doc.lineWidth(GRID_W);
+      doc.fillColor(fill);
+      doc.strokeColor(GRID);
+      doc.rect(x, yy, w, h).fillAndStroke();
+      doc.restore();
+    };
 
     // Titelzeile
+    doc.save();
     doc.rect(left, top, pageWidth, 32).fill(BRAND_RED);
+    doc.restore();
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(13);
     doc.text(`Stundenplan ${classRecord.name}`, left + 10, top + 9, {
       width: pageWidth * 0.5,
@@ -433,19 +451,9 @@ export async function exportTimetablePdf(
       }
     };
 
-    const strokeRect = (x: number, yy: number, w: number, h: number, color = GRID): void => {
-      doc.strokeColor(color).lineWidth(0.75);
-      doc.rect(x, yy, w, h).stroke();
-    };
-
-    const fillRect = (x: number, yy: number, w: number, h: number, color: string): void => {
-      doc.rect(x, yy, w, h).fill(color);
-    };
-
     // === Kopfzeile ===
     ensureSpace(headerRowH);
-    fillRect(left, y, timeColW, headerRowH, HEADER_BG);
-    strokeRect(left, y, timeColW, headerRowH, HEADER_BG);
+    paintCell(left, y, timeColW, headerRowH, HEADER_BG);
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
     doc.text('Tag / Zeit', left + cellPad, y + 10, {
       width: timeColW - cellPad * 2,
@@ -455,8 +463,7 @@ export async function exportTimetablePdf(
 
     for (let d = 0; d < 5; d++) {
       const x = left + timeColW + d * dayColW;
-      fillRect(x, y, dayColW, headerRowH, HEADER_BG);
-      strokeRect(x, y, dayColW, headerRowH, '#374151');
+      paintCell(x, y, dayColW, headerRowH, HEADER_BG);
       doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10);
       doc.text(WEEKDAYS_FULL[d]!, x + 2, y + 9, {
         width: dayColW - 4,
@@ -484,15 +491,17 @@ export async function exportTimetablePdf(
     // === Perioden / Pausen ===
     for (const row of structure) {
       if (row.type === 'BREAK') {
-        const h = 20;
+        const h = 22;
         ensureSpace(h);
-        fillRect(left, y, pageWidth, h, BREAK_BG);
-        strokeRect(left, y, pageWidth, h);
-        // innere Trennlinien für Excel-Look über die Tage hinweg weglassen – durchgehende Pause
+        // Jede Spalte einzeln rahmen → durchgehendes Gitter auch in Pausen
+        paintCell(left, y, timeColW, h, BREAK_BG);
+        for (let d = 0; d < 5; d++) {
+          paintCell(left + timeColW + d * dayColW, y, dayColW, h, BREAK_BG);
+        }
         const timePart =
           row.startTime && row.endTime ? `  ${row.startTime}–${row.endTime}` : '';
-        doc.fillColor('#334155').font('Helvetica-Bold').fontSize(8);
-        doc.text(`— ${row.label.toUpperCase()}${timePart} —`, left, y + 6, {
+        doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(8);
+        doc.text(`— ${row.label.toUpperCase()}${timePart} —`, left, y + 7, {
           width: pageWidth,
           align: 'center',
           lineBreak: false,
@@ -525,35 +534,32 @@ export async function exportTimetablePdf(
       ensureSpace(rowH);
 
       // Zeitspalte
-      fillRect(left, y, timeColW, rowH, TIME_BG);
-      strokeRect(left, y, timeColW, rowH);
+      paintCell(left, y, timeColW, rowH, TIME_BG);
       doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8);
       doc.text(row.label, left + cellPad, y + 8, {
         width: timeColW - cellPad * 2,
         align: 'center',
       });
       if (timeLabel) {
-        doc.fillColor('#4B5563').font('Helvetica').fontSize(7);
+        doc.fillColor('#374151').font('Helvetica').fontSize(7);
         doc.text(timeLabel, left + cellPad, y + 22, {
           width: timeColW - cellPad * 2,
           align: 'center',
         });
       }
 
-      // Tageszellen
+      // Tageszellen – jede Zelle gefüllt + gerahmt
       for (let d = 1; d <= 5; d++) {
         const x = left + timeColW + (d - 1) * dayColW;
         const slot = slotMap.get(`${d}-${period}`);
 
         if (!slot) {
-          fillRect(x, y, dayColW, rowH, EMPTY_BG);
-          strokeRect(x, y, dayColW, rowH);
+          paintCell(x, y, dayColW, rowH, EMPTY_BG);
           continue;
         }
 
         const colors = subjectColor(slot.subject.name);
-        fillRect(x, y, dayColW, rowH, colors.bg);
-        strokeRect(x, y, dayColW, rowH, colors.border);
+        paintCell(x, y, dayColW, rowH, colors.bg);
 
         const textW = dayColW - cellPad * 2;
         let ty = y + cellPad + 2;
@@ -591,10 +597,8 @@ export async function exportTimetablePdf(
     const holRowH = 18;
 
     ensureSpace(holHeadH + 20);
-    fillRect(left, y, holColDate, holHeadH, HEADER_BG);
-    fillRect(left + holColDate, y, holColName, holHeadH, HEADER_BG);
-    strokeRect(left, y, holColDate, holHeadH);
-    strokeRect(left + holColDate, y, holColName, holHeadH);
+    paintCell(left, y, holColDate, holHeadH, HEADER_BG);
+    paintCell(left + holColDate, y, holColName, holHeadH, HEADER_BG);
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
     doc.text('Datum', left + 6, y + 6, { width: holColDate - 12, lineBreak: false });
     doc.text('Bezeichnung', left + holColDate + 6, y + 6, {
@@ -605,8 +609,8 @@ export async function exportTimetablePdf(
 
     if (holidays.length === 0) {
       ensureSpace(holRowH);
-      fillRect(left, y, pageWidth, holRowH, '#F9FAFB');
-      strokeRect(left, y, pageWidth, holRowH);
+      paintCell(left, y, holColDate, holRowH, '#F9FAFB');
+      paintCell(left + holColDate, y, holColName, holRowH, '#F9FAFB');
       doc.fillColor('#6B7280').font('Helvetica').fontSize(8);
       doc.text('Keine Feiertage erfasst.', left + 6, y + 5, {
         width: pageWidth - 12,
@@ -616,11 +620,9 @@ export async function exportTimetablePdf(
     } else {
       holidays.forEach((h, idx) => {
         ensureSpace(holRowH);
-        const bg = idx % 2 === 0 ? '#FFFFFF' : '#F3F4F6';
-        fillRect(left, y, holColDate, holRowH, bg);
-        fillRect(left + holColDate, y, holColName, holRowH, bg);
-        strokeRect(left, y, holColDate, holRowH);
-        strokeRect(left + holColDate, y, holColName, holRowH);
+        const bg = idx % 2 === 0 ? '#FFFFFF' : '#E5E7EB';
+        paintCell(left, y, holColDate, holRowH, bg);
+        paintCell(left + holColDate, y, holColName, holRowH, bg);
 
         const dateStr = h.date.toLocaleDateString('de-CH', {
           weekday: 'short',
@@ -646,7 +648,7 @@ export async function exportTimetablePdf(
       doc.text('Legende (Fächer)', left, y, { lineBreak: false });
       y += 14;
 
-      const swatch = 12;
+      const swatch = 14;
       const gap = 8;
       const colW = (pageWidth - gap) / 2;
       let col = 0;
@@ -658,8 +660,7 @@ export async function exportTimetablePdf(
         const x = left + col * (colW + gap);
         const colors = subjectColor(name);
 
-        fillRect(x, rowY, swatch, swatch, colors.bg);
-        strokeRect(x, rowY, swatch, swatch, colors.border);
+        paintCell(x, rowY, swatch, swatch, colors.bg);
         doc.fillColor('#111827').font('Helvetica').fontSize(8);
         doc.text(name, x + swatch + 6, rowY + 2, {
           width: colW - swatch - 10,
