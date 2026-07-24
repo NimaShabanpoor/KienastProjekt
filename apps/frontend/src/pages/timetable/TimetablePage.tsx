@@ -275,7 +275,7 @@ export default function TimetablePage() {
             type: 'OVERRIDE',
             subjectId,
             teacherId,
-            room: room || null,
+            room: room.trim(),
             isTest,
           });
         }
@@ -288,7 +288,7 @@ export default function TimetablePage() {
         period: editing.period,
         subjectId,
         teacherId,
-        room: room || null,
+        room: room.trim(),
         isTest,
         doubleLesson,
       });
@@ -1077,12 +1077,14 @@ export default function TimetablePage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-600 mb-1.5">Raum</label>
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1.5">Raum *</label>
                     <input
+                      required
                       value={room}
                       onChange={(e) => setRoom(e.target.value)}
                       className={fieldClass}
-                      placeholder="optional"
+                      placeholder="z. B. 101"
+                      maxLength={50}
                     />
                   </div>
                   <label className="flex items-center gap-2.5 text-sm text-neutral-800">
@@ -1122,7 +1124,10 @@ export default function TimetablePage() {
               <button
                 type="button"
                 onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || (!exceptionCancel && (!subjectId || !teacherId))}
+                disabled={
+                  saveMutation.isPending ||
+                  (!exceptionCancel && (!subjectId || !teacherId || !room.trim()))
+                }
                 className={btnPrimary}
               >
                 Speichern

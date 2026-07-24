@@ -372,10 +372,15 @@ export async function upsertSlot(input: {
   period: number;
   subjectId: string;
   teacherId: string;
-  room?: string | null;
+  room: string;
   isTest?: boolean;
   doubleLesson?: boolean;
 }) {
+  const room = input.room.trim();
+  if (!room) {
+    throw new ApiError('Raum ist erforderlich.', 'ROOM_REQUIRED', 400);
+  }
+
   await assertSubjectBelongsToClass(input.subjectId, input.classId);
   await assertTeacher(input.teacherId);
 
@@ -420,13 +425,13 @@ export async function upsertSlot(input: {
         period,
         subjectId: input.subjectId,
         teacherId: input.teacherId,
-        room: input.room ?? null,
+        room,
         isTest: input.isTest ?? false,
       },
       update: {
         subjectId: input.subjectId,
         teacherId: input.teacherId,
-        room: input.room ?? null,
+        room,
         isTest: input.isTest ?? false,
       },
       include: slotInclude,
@@ -538,9 +543,14 @@ export async function upsertException(input: {
     throw new ApiError('Ungültige Periode.', 'INVALID_PERIOD', 400);
   }
 
+  const room = input.room?.trim() || null;
+
   if (input.type === 'OVERRIDE') {
     if (!input.subjectId || !input.teacherId) {
       throw new ApiError('OVERRIDE benötigt Fach und Lehrperson.', 'MISSING_FIELDS', 400);
+    }
+    if (!room) {
+      throw new ApiError('Raum ist erforderlich.', 'ROOM_REQUIRED', 400);
     }
     await assertSubjectBelongsToClass(input.subjectId, input.classId);
     await assertTeacher(input.teacherId);
@@ -568,14 +578,14 @@ export async function upsertException(input: {
       type: input.type as TimetableExceptionType,
       subjectId: input.type === 'OVERRIDE' ? input.subjectId! : null,
       teacherId: input.type === 'OVERRIDE' ? input.teacherId! : null,
-      room: input.type === 'OVERRIDE' ? (input.room ?? null) : null,
+      room: input.type === 'OVERRIDE' ? room : null,
       isTest: input.type === 'OVERRIDE' ? (input.isTest ?? false) : null,
     },
     update: {
       type: input.type as TimetableExceptionType,
       subjectId: input.type === 'OVERRIDE' ? input.subjectId! : null,
       teacherId: input.type === 'OVERRIDE' ? input.teacherId! : null,
-      room: input.type === 'OVERRIDE' ? (input.room ?? null) : null,
+      room: input.type === 'OVERRIDE' ? room : null,
       isTest: input.type === 'OVERRIDE' ? (input.isTest ?? false) : null,
     },
     include: {
