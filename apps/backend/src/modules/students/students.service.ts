@@ -143,10 +143,19 @@ export async function getStudentAbsences(studentId: string) {
     where: { studentId },
     include: {
       lesson: {
-        include: { subject: { select: { name: true } } },
+        select: {
+          id: true,
+          date: true,
+          startTime: true,
+          endTime: true,
+          isTest: true,
+          isCancelled: true,
+          room: true,
+          subject: { select: { id: true, name: true } },
+        },
       },
     },
-    orderBy: { lesson: { date: 'desc' } },
+    orderBy: [{ lesson: { date: 'desc' } }, { lesson: { startTime: 'desc' } }],
   });
 }
 
@@ -154,10 +163,10 @@ export async function getStudentGrades(studentId: string) {
   return prisma.grade.findMany({
     where: { studentId },
     include: {
-      subject: { select: { name: true } },
-      category: { select: { name: true, weight: true } },
+      subject: { select: { id: true, name: true } },
+      category: { select: { id: true, name: true, weight: true } },
       corrections: { orderBy: { correctedAt: 'desc' } },
     },
-    orderBy: { date: 'desc' },
+    orderBy: [{ subject: { name: 'asc' } }, { date: 'desc' }],
   });
 }

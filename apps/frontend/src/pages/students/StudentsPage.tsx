@@ -189,6 +189,7 @@ export default function StudentsPage() {
                       <Link to={`/students/${student.id}`} className="font-medium text-neutral-900 hover:text-brand-red">
                         {student.lastName}, {student.firstName}
                       </Link>
+                      <p className="text-xs text-neutral-400 mt-0.5">Noten & Absenzen anzeigen</p>
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-600">{student.class?.name ?? '–'}</td>
                     <td className="px-4 py-3 text-sm text-neutral-600">{student.email ?? '–'}</td>
