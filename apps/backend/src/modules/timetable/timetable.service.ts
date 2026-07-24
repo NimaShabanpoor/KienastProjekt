@@ -443,6 +443,51 @@ export async function deleteSlot(id: string) {
   return { deleted: true };
 }
 
+export async function listHolidays(dateFrom?: string, dateTo?: string) {
+  return prisma.schoolHoliday.findMany({
+    where: {
+      ...(dateFrom || dateTo
+        ? {
+            date: {
+              ...(dateFrom && { gte: new Date(dateFrom) }),
+              ...(dateTo && { lte: new Date(dateTo) }),
+            },
+          }
+        : {}),
+    },
+    orderBy: { date: 'asc' },
+  });
+}
+
+export async function upsertHoliday(input: { date: string; name: string }) {
+  const name = input.name.trim();
+  if (!name) {
+    throw new ApiError('Bezeichnung erforderlich.', 'HOLIDAY_NAME_REQUIRED', 400);
+  }
+
+  return prisma.schoolHoliday.upsert({
+    where: { date: new Date(input.date) },
+    create: {
+      date: new Date(input.date),
+      name,
+    },
+    update: { name },
+  });
+}
+
+export async function deleteHoliday(id: string) {
+  const holiday = await prisma.schoolHoliday.findUnique({ where: { id } });
+  if (!holiday) throw new ApiError('Feiertag nicht gefunden.', 'HOLIDAY_NOT_FOUND', 404);
+  await prisma.schoolHoliday.delete({ where: { id } });
+  return { deleted: true };
+}
+
+async function findHolidayOnDate(date: string) {
+  return prisma.schoolHoliday.findUnique({
+    where: { date: new Date(date) },
+  });
+}
+
 export async function listExceptions(classId: string, dateFrom?: string, dateTo?: string) {
   return prisma.timetableException.findMany({
     where: {
@@ -477,6 +522,15 @@ export async function upsertException(input: {
   const day = toSchoolDayOfWeek(new Date(input.date + 'T12:00:00'));
   if (day === null) {
     throw new ApiError('Ausnahmen nur für Mo–Fr möglich.', 'WEEKEND_NOT_ALLOWED', 400);
+  }
+
+  const holiday = await findHolidayOnDate(input.date);
+  if (holiday) {
+    throw new ApiError(
+      `Am ${input.date} ist schulfrei («${holiday.name}»). Einzelne Ausnahmen sind nicht nötig.`,
+      'HOLIDAY_DAY',
+      400
+    );
   }
 
   const periodMap = await getPeriodMap();
@@ -557,6 +611,15 @@ export async function materializeLessonsForRange(params: {
   const from = new Date(params.dateFrom + 'T12:00:00');
   const to = new Date(params.dateTo + 'T12:00:00');
 
+  const holidays = await prisma.schoolHoliday.findMany({
+    where: {
+      date: { gte: new Date(params.dateFrom), lte: new Date(params.dateTo) },
+    },
+  });
+  const holidayDates = new Set(
+    holidays.map((h) => h.date.toISOString().slice(0, 10))
+  );
+
   for (const cls of classes) {
     const slots = await prisma.timetableSlot.findMany({ where: { classId: cls.id } });
     if (slots.length === 0) continue;
@@ -574,6 +637,17 @@ export async function materializeLessonsForRange(params: {
       const dateStr = d.toISOString().slice(0, 10);
 
       const daySlots = slots.filter((s) => s.dayOfWeek === dayOfWeek);
+
+      // Feiertag: alle geplanten Lektionen als Ausfall markieren
+      if (holidayDates.has(dateStr)) {
+        for (const slot of daySlots) {
+          const periodMeta = periodMap.get(slot.period);
+          if (!periodMeta) continue;
+          await cancelMaterializedLesson(slot.subjectId, dateStr, periodMeta.startTime);
+        }
+        continue;
+      }
+
       for (const slot of daySlots) {
         const periodMeta = periodMap.get(slot.period);
         if (!periodMeta) continue;

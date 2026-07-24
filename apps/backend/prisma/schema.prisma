@@ -214,6 +214,20 @@ model TimetableStructureRow {
 }
 
 // ============================================================
+// FEIERTAGE / SCHULFREIE TAGE (schulweit, kein Unterricht)
+// ============================================================
+model SchoolHoliday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique @db.Date
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@map("school_holidays")
+}
+
+// ============================================================
 // STUNDENPLAN-VORLAGE (wiederkehrend Mo–Fr, pro Klasse)
 // dayOfWeek: 1=Mo … 5=Fr, period: Nummer der LESSON-Zeile
 // ============================================================

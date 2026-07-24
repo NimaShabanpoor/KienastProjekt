@@ -25,6 +25,12 @@ type StructureRow = {
   period: number | null;
 };
 
+type SchoolHoliday = {
+  id: string;
+  date: string;
+  name: string;
+};
+
 type Slot = {
   id: string;
   classId: string;
@@ -96,6 +102,23 @@ function structureToDraft(rows: StructureRow[]): DraftRow[] {
   }));
 }
 
+function holidayDateLabel(value: string): string {
+  const raw = value.slice(0, 10);
+  const d = new Date(raw + 'T12:00:00');
+  if (Number.isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString('de-CH', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function normalizeHolidayDate(value: string | Date): string {
+  if (typeof value === 'string') return value.slice(0, 10);
+  return value.toISOString().slice(0, 10);
+}
+
 export default function TimetablePage() {
   const queryClient = useQueryClient();
   const [classId, setClassId] = useState('');
@@ -104,6 +127,8 @@ export default function TimetablePage() {
   const [editing, setEditing] = useState<(CellTarget & { slot?: Slot; exception?: Exception }) | null>(null);
   const [showTimesEditor, setShowTimesEditor] = useState(false);
   const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
+  const [holidayDate, setHolidayDate] = useState('');
+  const [holidayName, setHolidayName] = useState('');
 
   const [subjectId, setSubjectId] = useState('');
   const [teacherId, setTeacherId] = useState('');
@@ -158,8 +183,20 @@ export default function TimetablePage() {
     },
   });
 
+  const { data: holidays } = useQuery({
+    queryKey: ['timetable-holidays'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: SchoolHoliday[] }>('/api/v1/timetable/holidays');
+      return data.data.map((h) => ({ ...h, date: normalizeHolidayDate(h.date) }));
+    },
+  });
+
   const structure = timetable?.structure ?? structureData?.structure ?? [];
   const periods = timetable?.periods ?? structureData?.periods ?? [];
+  const holidayOnExceptionDate = useMemo(
+    () => (exceptionDate ? holidays?.find((h) => h.date === exceptionDate) : undefined),
+    [holidays, exceptionDate]
+  );
 
   const { data: exceptions } = useQuery({
     queryKey: ['timetable-exceptions', classId, exceptionDate],
@@ -292,6 +329,38 @@ export default function TimetablePage() {
     },
   });
 
+  const saveHolidayMutation = useMutation({
+    mutationFn: async () => {
+      await apiClient.put('/api/v1/timetable/holidays', {
+        date: holidayDate,
+        name: holidayName.trim(),
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['timetable-holidays'] });
+      void queryClient.invalidateQueries({ queryKey: ['lessons'] });
+      setHolidayName('');
+      setHolidayDate('');
+    },
+  });
+
+  const deleteHolidayMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/api/v1/timetable/holidays/${id}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['timetable-holidays'] });
+      void queryClient.invalidateQueries({ queryKey: ['lessons'] });
+    },
+  });
+
+  const holidaySaveError = (() => {
+    const err = saveHolidayMutation.error;
+    if (!err || !axios.isAxiosError(err)) return null;
+    const data = err.response?.data as { error?: string } | undefined;
+    return data?.error ?? 'Feiertag konnte nicht gespeichert werden.';
+  })();
+
   const openTimesEditor = (): void => {
     const source = structure.length > 0 ? structure : (structureData?.structure ?? []);
     setDraftRows(structureToDraft(source));
@@ -335,6 +404,7 @@ export default function TimetablePage() {
   };
 
   const openCell = (dayOfWeek: number, period: number): void => {
+    if (holidayOnExceptionDate) return;
     if (exceptionDate && exceptionDayOfWeek !== null && exceptionDayOfWeek !== dayOfWeek) {
       return;
     }
@@ -435,7 +505,7 @@ export default function TimetablePage() {
       </div>
 
       {classId && (
-        <div className="mb-6">
+        <div className="mb-6 space-y-4">
           {!showExceptionPanel ? (
             <button
               type="button"
@@ -443,13 +513,13 @@ export default function TimetablePage() {
               className="inline-flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700 transition-colors"
             >
               <CalendarRange className="w-4 h-4" />
-              Ausnahme für ein einzelnes Datum erfassen…
+              Ausnahme / Feiertag für ein einzelnes Datum erfassen…
             </button>
           ) : (
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-4 py-3 max-w-md">
-              <div className="flex items-center justify-between mb-2">
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-4 py-3 max-w-xl space-y-5">
+              <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-neutral-600 uppercase tracking-wide">
-                  Ausnahme (optional)
+                  Ausnahme & Feiertag
                 </p>
                 <button
                   type="button"
@@ -462,26 +532,159 @@ export default function TimetablePage() {
                   Schliessen
                 </button>
               </div>
-              <p className="text-xs text-neutral-500 mb-2">
-                Nur nötig bei Stellvertretung, Verschiebung oder Ausfall – die Wochenvorlage bleibt unverändert.
+
+              <div>
+                <p className="text-sm font-medium text-neutral-800 mb-1">Ausnahme für diese Klasse</p>
+                <p className="text-xs text-neutral-500 mb-2">
+                  Stellvertretung, Verschiebung oder Ausfall – die Wochenvorlage bleibt unverändert.
+                </p>
+                <input
+                  type="date"
+                  value={exceptionDate}
+                  onChange={(e) => setExceptionDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white text-neutral-700 focus:outline-none focus:border-neutral-400"
+                />
+              </div>
+
+              <div className="border-t border-neutral-200 pt-4">
+                <p className="text-sm font-medium text-neutral-800 mb-1">Feiertag / schulfrei (alle Klassen)</p>
+                <p className="text-xs text-neutral-500 mb-3">
+                  An diesem Tag findet kein Unterricht statt.
+                </p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <input
+                    type="date"
+                    value={holidayDate}
+                    onChange={(e) => setHolidayDate(e.target.value)}
+                    className="px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={holidayName}
+                    onChange={(e) => setHolidayName(e.target.value)}
+                    placeholder="z.B. Bundesfeiertag"
+                    className="flex-1 min-w-[10rem] px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => saveHolidayMutation.mutate()}
+                    disabled={
+                      saveHolidayMutation.isPending || !holidayDate || !holidayName.trim()
+                    }
+                    className="px-3 py-2 text-sm rounded-lg bg-brand-red text-white disabled:opacity-50"
+                  >
+                    Hinzufügen
+                  </button>
+                </div>
+                {holidaySaveError && (
+                  <p className="text-sm text-red-600 mb-2">{holidaySaveError}</p>
+                )}
+                {(holidays?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-neutral-400">Noch keine Feiertage erfasst.</p>
+                ) : (
+                  <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white overflow-hidden">
+                    {holidays!.map((h) => (
+                      <li key={h.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                        <div>
+                          <div className="font-medium text-neutral-800">{h.name}</div>
+                          <div className="text-xs text-neutral-500">{holidayDateLabel(h.date)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteHolidayMutation.mutate(h.id)}
+                          disabled={deleteHolidayMutation.isPending}
+                          className="p-1.5 text-neutral-400 hover:text-red-600"
+                          title="Feiertag entfernen"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!showExceptionPanel && (holidays?.length ?? 0) > 0 && (
+            <div className="max-w-xl">
+              <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">
+                Feiertage / schulfrei
               </p>
-              <input
-                type="date"
-                value={exceptionDate}
-                onChange={(e) => setExceptionDate(e.target.value)}
-                className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white text-neutral-700 focus:outline-none focus:border-neutral-400"
-              />
+              <ul className="rounded-lg border border-neutral-200 bg-white divide-y divide-neutral-100 text-sm">
+                {holidays!.map((h) => (
+                  <li key={h.id} className="px-3 py-2 flex justify-between gap-3">
+                    <span className="font-medium text-neutral-800">{h.name}</span>
+                    <span className="text-neutral-500 text-xs whitespace-nowrap">
+                      {holidayDateLabel(h.date)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
       )}
 
       {!classId && (
-        <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50/50 p-12 text-center text-neutral-500">
-          Bitte zuerst eine Klasse auswählen, um den Stundenplan anzuzeigen oder zu bearbeiten.
-          <p className="mt-3 text-sm">
-            Lektions- und Pausenzeiten kannst du jederzeit über «Zeiten bearbeiten» anpassen.
-          </p>
+        <div className="space-y-4 mb-6">
+          <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50/50 p-12 text-center text-neutral-500">
+            Bitte zuerst eine Klasse auswählen, um den Stundenplan anzuzeigen oder zu bearbeiten.
+            <p className="mt-3 text-sm">
+              Lektions- und Pausenzeiten kannst du jederzeit über «Zeiten bearbeiten» anpassen.
+            </p>
+          </div>
+          <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3 max-w-xl">
+            <p className="text-sm font-medium text-neutral-800 mb-1">Feiertage / schulfrei</p>
+            <p className="text-xs text-neutral-500 mb-3">
+              Gilt für alle Klassen – an diesen Tagen findet kein Unterricht statt.
+            </p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              <input
+                type="date"
+                value={holidayDate}
+                onChange={(e) => setHolidayDate(e.target.value)}
+                className="px-3 py-2 border border-neutral-200 rounded-lg text-sm"
+              />
+              <input
+                type="text"
+                value={holidayName}
+                onChange={(e) => setHolidayName(e.target.value)}
+                placeholder="z.B. Bundesfeiertag"
+                className="flex-1 min-w-[10rem] px-3 py-2 border border-neutral-200 rounded-lg text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => saveHolidayMutation.mutate()}
+                disabled={saveHolidayMutation.isPending || !holidayDate || !holidayName.trim()}
+                className="px-3 py-2 text-sm rounded-lg bg-brand-red text-white disabled:opacity-50"
+              >
+                Hinzufügen
+              </button>
+            </div>
+            {holidaySaveError && <p className="text-sm text-red-600 mb-2">{holidaySaveError}</p>}
+            {(holidays?.length ?? 0) === 0 ? (
+              <p className="text-xs text-neutral-400">Noch keine Feiertage erfasst.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100 border border-neutral-200 rounded-lg overflow-hidden">
+                {holidays!.map((h) => (
+                  <li key={h.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <div>
+                      <div className="font-medium text-neutral-800">{h.name}</div>
+                      <div className="text-xs text-neutral-500">{holidayDateLabel(h.date)}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteHolidayMutation.mutate(h.id)}
+                      className="p-1.5 text-neutral-400 hover:text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
 
@@ -491,7 +694,12 @@ export default function TimetablePage() {
 
       {classId && !isLoading && (
         <>
-          {isExceptionMode && (
+          {isExceptionMode && holidayOnExceptionDate && (
+            <div className="mb-4 text-sm bg-sky-50 border border-sky-200 text-sky-900 rounded-lg px-3 py-2">
+              Schulfrei am {exceptionDate}: «{holidayOnExceptionDate.name}» – kein Unterricht, Zellen nicht bearbeitbar.
+            </div>
+          )}
+          {isExceptionMode && !holidayOnExceptionDate && (
             <div className="mb-4 text-sm bg-amber-50/80 border border-amber-200/80 text-amber-900 rounded-lg px-3 py-2">
               Ausnahme-Modus für {exceptionDate} ({WEEKDAY_LABELS[exceptionDayOfWeek!]}) –
               Änderungen betreffen nur dieses Datum.
@@ -499,7 +707,7 @@ export default function TimetablePage() {
           )}
           {exceptionDate && exceptionDayOfWeek === null && (
             <div className="mb-4 text-sm bg-neutral-100 border border-neutral-200 text-neutral-600 rounded-lg px-3 py-2">
-              Ausnahmen sind nur für Werktage (Mo–Fr) möglich.
+              Ausnahmen sind nur für Werktage (Mo–Fr) möglich. Feiertage kannst du trotzdem oben erfassen.
             </div>
           )}
 

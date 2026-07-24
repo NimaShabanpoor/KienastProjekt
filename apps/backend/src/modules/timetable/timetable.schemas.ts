@@ -48,6 +48,11 @@ export const SaveTimetableStructureBodySchema = z.object({
     .max(40),
 });
 
+export const UpsertSchoolHolidayBodySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  name: z.string().trim().min(1).max(120),
+});
+
 export const TimetableQuerySchema = z.object({
   classId: z.string().cuid(),
 });

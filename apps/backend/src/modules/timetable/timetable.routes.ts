@@ -11,6 +11,7 @@ import {
   UpsertTimetableSlotBodySchema,
   UpsertTimetableExceptionBodySchema,
   SaveTimetableStructureBodySchema,
+  UpsertSchoolHolidayBodySchema,
 } from './timetable.schemas';
 
 const router = Router();
@@ -22,6 +23,19 @@ router.put(
   validateMiddleware({ body: SaveTimetableStructureBodySchema }),
   auditLogMiddleware('TIMETABLE_IMPORT', AuditEntityType.TIMETABLE_IMPORT),
   timetableController.saveStructure
+);
+
+router.get('/holidays', timetableController.listHolidays);
+router.put(
+  '/holidays',
+  validateMiddleware({ body: UpsertSchoolHolidayBodySchema }),
+  auditLogMiddleware('TIMETABLE_IMPORT', AuditEntityType.TIMETABLE_IMPORT),
+  timetableController.upsertHoliday
+);
+router.delete(
+  '/holidays/:id',
+  auditLogMiddleware('TIMETABLE_IMPORT', AuditEntityType.TIMETABLE_IMPORT),
+  timetableController.removeHoliday
 );
 
 router.get('/', timetableController.getTimetable);

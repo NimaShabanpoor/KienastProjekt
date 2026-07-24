@@ -79,3 +79,32 @@ export const saveStructure = async (req: Request, res: Response, next: NextFunct
     res.json({ data });
   } catch (err) { next(err); }
 };
+
+export const listHolidays = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const data = await timetableService.listHolidays(
+      req.query['dateFrom'] as string | undefined,
+      req.query['dateTo'] as string | undefined
+    );
+    res.json({ data });
+  } catch (err) { next(err); }
+};
+
+export const upsertHoliday = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const holiday = await timetableService.upsertHoliday(
+      req.body as Parameters<typeof timetableService.upsertHoliday>[0]
+    );
+    req.auditEntityId = holiday.id;
+    res.status(201).json({ data: holiday });
+  } catch (err) { next(err); }
+};
+
+export const removeHoliday = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const id = req.params['id'] ?? '';
+    await timetableService.deleteHoliday(id);
+    req.auditEntityId = id;
+    res.json({ data: { message: 'Feiertag gelöscht.' } });
+  } catch (err) { next(err); }
+};
