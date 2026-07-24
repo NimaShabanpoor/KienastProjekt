@@ -7,9 +7,12 @@ import type { User } from '@schuladmin/shared';
 import { Role, ROLE_LABELS } from '@schuladmin/shared';
 import { UserCog, UserPlus } from 'lucide-react';
 
+type StatusFilter = 'active' | 'inactive' | 'all';
+
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -17,9 +20,12 @@ export default function UsersPage() {
   const [password, setPassword] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['users'],
+    queryKey: ['users', statusFilter],
     queryFn: async () => {
-      const { data } = await apiClient.get<{ data: User[] }>('/api/v1/users');
+      const params = new URLSearchParams({ limit: '100' });
+      if (statusFilter === 'active') params.set('isActive', 'true');
+      if (statusFilter === 'inactive') params.set('isActive', 'false');
+      const { data } = await apiClient.get<{ data: User[] }>(`/api/v1/users?${params}`);
       return data.data;
     },
   });
@@ -78,8 +84,23 @@ export default function UsersPage() {
         </form>
       )}
 
+      <div className="mb-4">
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          className="px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white"
+        >
+          <option value="all">Alle Benutzer</option>
+          <option value="active">Nur aktive</option>
+          <option value="inactive">Nur inaktive</option>
+        </select>
+      </div>
+
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading && <div className="p-8 text-center text-neutral-400">Laden...</div>}
+        {!isLoading && (data?.length ?? 0) === 0 && (
+          <div className="p-8 text-center text-neutral-400">Keine Benutzer gefunden.</div>
+        )}
         {data?.map((user) => (
           <div key={user.id} className="flex items-center justify-between p-4 border-b border-neutral-100 last:border-0">
             <div>
@@ -91,8 +112,10 @@ export default function UsersPage() {
                 {user.isActive ? 'Aktiv' : 'Inaktiv'}
               </span>
               <button
+                type="button"
                 onClick={() => toggleActiveMutation.mutate({ id: user.id, isActive: user.isActive })}
-                className="text-xs text-brand-red font-medium"
+                disabled={toggleActiveMutation.isPending}
+                className="text-xs text-brand-red font-medium hover:underline disabled:opacity-50"
               >
                 {user.isActive ? 'Deaktivieren' : 'Aktivieren'}
               </button>

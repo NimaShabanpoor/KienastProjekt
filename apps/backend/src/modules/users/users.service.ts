@@ -31,10 +31,12 @@ export async function listUsers(params: {
   const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, role, isActive } = params;
   const skip = (page - 1) * limit;
 
+  // Inaktive Benutzer müssen sichtbar bleiben, damit man sie wieder aktivieren kann.
+  // deletedAt wird bei Deaktivierung gesetzt – deshalb nicht pauschal ausfiltern.
   const where = {
     ...(role !== undefined && { role }),
-    ...(isActive !== undefined && { isActive }),
-    deletedAt: null,
+    ...(isActive !== undefined ? { isActive } : {}),
+    ...(isActive === true ? { deletedAt: null } : {}),
   };
 
   const [users, total] = await Promise.all([
