@@ -323,8 +323,8 @@ export async function exportAuditLogCsv(): Promise<string> {
 }
 
 /**
- * Wochenstundenplan als PDF (Querformat), ähnlich dem IT-Bénédict-Stundenplan:
- * Grid Mo–Fr mit Fach, Zimmer, Lehrperson + Feiertage darunter.
+ * Wochenstundenplan als farbcodiertes PDF (Querformat), Excel-ähnlich:
+ * Gitter, Fachfarben, Pausen-Trennzeilen, Feiertags-Tabelle, Farblegende.
  */
 export async function exportTimetablePdf(
   classId: string
@@ -356,16 +356,37 @@ export async function exportTimetablePdf(
     slotMap.set(`${s.dayOfWeek}-${s.period}`, s);
   }
 
-  const subjectLegend = new Map<string, string>();
-  for (const s of slots) {
-    subjectLegend.set(s.subject.name, s.subject.name);
+  /** Pastell-Farben pro Fach (Hintergrund + Text) – konsistent über den Plan */
+  const SUBJECT_PALETTE: { bg: string; fg: string; border: string }[] = [
+    { bg: '#DBEAFE', fg: '#1E3A8A', border: '#93C5FD' }, // blau
+    { bg: '#D1FAE5', fg: '#065F46', border: '#6EE7B7' }, // grün
+    { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' }, // amber
+    { bg: '#EDE9FE', fg: '#5B21B6', border: '#C4B5FD' }, // violett
+    { bg: '#FFE4E6', fg: '#9F1239', border: '#FDA4AF' }, // rose
+    { bg: '#CFFAFE', fg: '#155E75', border: '#67E8F9' }, // cyan
+    { bg: '#FFEDD5', fg: '#9A3412', border: '#FDBA74' }, // orange
+    { bg: '#ECFCCB', fg: '#3F6212', border: '#BEF264' }, // lime
+    { bg: '#FCE7F3', fg: '#9D174D', border: '#F9A8D4' }, // pink
+    { bg: '#E0E7FF', fg: '#3730A3', border: '#A5B4FC' }, // indigo
+  ];
+
+  function subjectColor(name: string): { bg: string; fg: string; border: string } {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = (hash + name.charCodeAt(i) * (i + 1)) % SUBJECT_PALETTE.length;
+    }
+    return SUBJECT_PALETTE[hash]!;
   }
+
+  const subjectsUsed = [...new Set(slots.map((s) => s.subject.name))].sort((a, b) =>
+    a.localeCompare(b, 'de')
+  );
 
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
       layout: 'landscape',
-      margins: { top: 28, bottom: 28, left: 28, right: 28 },
+      margins: { top: 24, bottom: 24, left: 24, right: 24 },
     });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -376,92 +397,107 @@ export async function exportTimetablePdf(
     const top = doc.page.margins.top;
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const pageBottom = doc.page.height - doc.page.margins.bottom;
+    const GRID = '#64748B';
+    const HEADER_BG = '#1F2937';
+    const TIME_BG = '#E5E7EB';
+    const EMPTY_BG = '#FFFFFF';
+    const BREAK_BG = '#CBD5E1';
 
-    // Header-Leiste
-    doc.rect(left, top, pageWidth, 36).fill(BRAND_RED);
-    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(14);
-    doc.text(`Stundenplan ${classRecord.name}`, left + 12, top + 10, {
-      width: pageWidth * 0.45,
-      align: 'left',
+    // Titelzeile
+    doc.rect(left, top, pageWidth, 32).fill(BRAND_RED);
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(13);
+    doc.text(`Stundenplan ${classRecord.name}`, left + 10, top + 9, {
+      width: pageWidth * 0.5,
+      lineBreak: false,
     });
-    doc.font('Helvetica').fontSize(10);
+    doc.font('Helvetica').fontSize(9);
     doc.text(
-      `${classRecord.schoolYear} · ${classRecord.semester}. Semester`,
-      left + pageWidth * 0.45,
-      top + 12,
-      { width: pageWidth * 0.55 - 12, align: 'right' }
+      `${classRecord.schoolYear} · ${classRecord.semester}. Semester · Export ${new Date().toLocaleDateString('de-CH')}`,
+      left + pageWidth * 0.48,
+      top + 11,
+      { width: pageWidth * 0.52 - 10, align: 'right', lineBreak: false }
     );
 
-    let y = top + 48;
-    doc.fillColor('#333333').font('Helvetica').fontSize(9);
-    doc.text(
-      `Wochenvorlage Mo–Fr · Exportiert am ${new Date().toLocaleDateString('de-CH')}`,
-      left,
-      y,
-      { width: pageWidth }
-    );
-    y += 18;
+    let y = top + 42;
 
-    const timeColW = 78;
+    const timeColW = 82;
     const dayColW = (pageWidth - timeColW) / 5;
-    const headerRowH = 34;
-    const cellMinH = 42;
+    const headerRowH = 28;
+    const cellPad = 4;
+    const cellMinH = 48;
 
-    // Tabellenkopf
-    doc.rect(left, y, pageWidth, headerRowH).fill('#F3F4F6');
-    doc.strokeColor('#9CA3AF').lineWidth(0.8);
-    doc.rect(left, y, pageWidth, headerRowH).stroke();
+    const ensureSpace = (needed: number): void => {
+      if (y + needed > pageBottom) {
+        doc.addPage();
+        y = top;
+      }
+    };
 
-    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9);
-    doc.text('Tag / Zeit', left + 4, y + 6, { width: timeColW - 8, align: 'left' });
-    doc.font('Helvetica').fontSize(7).fillColor('#6B7280');
-    doc.text('Fach · Zimmer · Lehrperson', left + 4, y + 18, {
-      width: timeColW - 8,
+    const strokeRect = (x: number, yy: number, w: number, h: number, color = GRID): void => {
+      doc.strokeColor(color).lineWidth(0.75);
+      doc.rect(x, yy, w, h).stroke();
+    };
+
+    const fillRect = (x: number, yy: number, w: number, h: number, color: string): void => {
+      doc.rect(x, yy, w, h).fill(color);
+    };
+
+    // === Kopfzeile ===
+    ensureSpace(headerRowH);
+    fillRect(left, y, timeColW, headerRowH, HEADER_BG);
+    strokeRect(left, y, timeColW, headerRowH, HEADER_BG);
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
+    doc.text('Tag / Zeit', left + cellPad, y + 10, {
+      width: timeColW - cellPad * 2,
+      align: 'center',
+      lineBreak: false,
     });
 
     for (let d = 0; d < 5; d++) {
       const x = left + timeColW + d * dayColW;
-      doc.strokeColor('#9CA3AF').moveTo(x, y).lineTo(x, y + headerRowH).stroke();
-      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10);
-      doc.text(WEEKDAYS_FULL[d]!, x + 2, y + 6, { width: dayColW - 4, align: 'center' });
-      doc.fillColor('#6B7280').font('Helvetica').fontSize(8);
-      doc.text('Fach', x + 2, y + 20, { width: dayColW - 4, align: 'center' });
+      fillRect(x, y, dayColW, headerRowH, HEADER_BG);
+      strokeRect(x, y, dayColW, headerRowH, '#374151');
+      doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10);
+      doc.text(WEEKDAYS_FULL[d]!, x + 2, y + 9, {
+        width: dayColW - 4,
+        align: 'center',
+        lineBreak: false,
+      });
     }
     y += headerRowH;
 
-    const drawBreakRow = (label: string, timeLabel: string): void => {
-      const h = 18;
-      if (y + h > pageBottom - 80) {
-        doc.addPage();
-        y = top;
-      }
-      doc.rect(left, y, pageWidth, h).fill('#E5E7EB');
-      doc.strokeColor('#9CA3AF').rect(left, y, pageWidth, h).stroke();
-      doc.fillColor('#4B5563').font('Helvetica-Bold').fontSize(8);
-      const text = timeLabel ? `${label}  (${timeLabel})` : label;
-      doc.text(text, left, y + 5, { width: pageWidth, align: 'center' });
-      y += h;
-    };
-
-    const measureCellHeight = (
+    const measureLines = (
       subject: string,
       room: string,
       teacher: string,
       width: number
     ): number => {
+      const w = width - cellPad * 2;
       doc.font('Helvetica-Bold').fontSize(8);
-      let h = doc.heightOfString(subject || '–', { width: width - 8 });
+      let h = doc.heightOfString(subject, { width: w });
       doc.font('Helvetica').fontSize(7);
-      if (room) h += doc.heightOfString(room, { width: width - 8 }) + 1;
-      if (teacher) h += doc.heightOfString(teacher, { width: width - 8 }) + 1;
-      return Math.max(cellMinH, h + 10);
+      if (room) h += 2 + doc.heightOfString(room, { width: w });
+      if (teacher) h += 2 + doc.heightOfString(teacher, { width: w });
+      return Math.max(cellMinH, h + cellPad * 2);
     };
 
+    // === Perioden / Pausen ===
     for (const row of structure) {
       if (row.type === 'BREAK') {
-        const timeLabel =
-          row.startTime && row.endTime ? `${row.startTime}–${row.endTime}` : '';
-        drawBreakRow(row.label, timeLabel);
+        const h = 20;
+        ensureSpace(h);
+        fillRect(left, y, pageWidth, h, BREAK_BG);
+        strokeRect(left, y, pageWidth, h);
+        // innere Trennlinien für Excel-Look über die Tage hinweg weglassen – durchgehende Pause
+        const timePart =
+          row.startTime && row.endTime ? `  ${row.startTime}–${row.endTime}` : '';
+        doc.fillColor('#334155').font('Helvetica-Bold').fontSize(8);
+        doc.text(`— ${row.label.toUpperCase()}${timePart} —`, left, y + 6, {
+          width: pageWidth,
+          align: 'center',
+          lineBreak: false,
+        });
+        y += h;
         continue;
       }
 
@@ -469,115 +505,174 @@ export async function exportTimetablePdf(
       const timeLabel =
         row.startTime && row.endTime
           ? `${row.startTime} – ${row.endTime}`
-          : row.label;
+          : '';
 
-      // Zellenhöhe anhand Inhalt berechnen
       let rowH = cellMinH;
       for (let d = 1; d <= 5; d++) {
         const slot = slotMap.get(`${d}-${period}`);
         if (!slot) continue;
-        const teacher = `${slot.teacher.firstName} ${slot.teacher.lastName}`;
-        const room = slot.room ? `Zimmer ${slot.room}` : '';
         rowH = Math.max(
           rowH,
-          measureCellHeight(slot.subject.name, room, teacher, dayColW)
+          measureLines(
+            slot.subject.name,
+            slot.room ? `Zimmer ${slot.room}` : '',
+            `${slot.teacher.firstName} ${slot.teacher.lastName}`,
+            dayColW
+          )
         );
       }
 
-      if (y + rowH > pageBottom - 80) {
-        doc.addPage();
-        y = top;
+      ensureSpace(rowH);
+
+      // Zeitspalte
+      fillRect(left, y, timeColW, rowH, TIME_BG);
+      strokeRect(left, y, timeColW, rowH);
+      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8);
+      doc.text(row.label, left + cellPad, y + 8, {
+        width: timeColW - cellPad * 2,
+        align: 'center',
+      });
+      if (timeLabel) {
+        doc.fillColor('#4B5563').font('Helvetica').fontSize(7);
+        doc.text(timeLabel, left + cellPad, y + 22, {
+          width: timeColW - cellPad * 2,
+          align: 'center',
+        });
       }
 
-      // Zeit-Spalte
-      doc.strokeColor('#9CA3AF').lineWidth(0.7);
-      doc.rect(left, y, timeColW, rowH).fillAndStroke('#FAFAFA', '#9CA3AF');
-      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8);
-      doc.text(row.label, left + 4, y + 6, { width: timeColW - 8 });
-      doc.fillColor('#4B5563').font('Helvetica').fontSize(7);
-      doc.text(timeLabel, left + 4, y + 18, { width: timeColW - 8 });
-
+      // Tageszellen
       for (let d = 1; d <= 5; d++) {
         const x = left + timeColW + (d - 1) * dayColW;
-        doc.rect(x, y, dayColW, rowH).stroke();
         const slot = slotMap.get(`${d}-${period}`);
-        if (!slot) continue;
 
-        let ty = y + 5;
-        doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8);
-        doc.text(slot.subject.name, x + 4, ty, { width: dayColW - 8, align: 'left' });
-        ty += doc.heightOfString(slot.subject.name, { width: dayColW - 8 }) + 2;
-
-        if (slot.room) {
-          doc.fillColor('#374151').font('Helvetica').fontSize(7);
-          const roomText = `Zimmer ${slot.room}`;
-          doc.text(roomText, x + 4, ty, { width: dayColW - 8 });
-          ty += doc.heightOfString(roomText, { width: dayColW - 8 }) + 1;
+        if (!slot) {
+          fillRect(x, y, dayColW, rowH, EMPTY_BG);
+          strokeRect(x, y, dayColW, rowH);
+          continue;
         }
 
-        doc.fillColor('#4B5563').font('Helvetica').fontSize(7);
+        const colors = subjectColor(slot.subject.name);
+        fillRect(x, y, dayColW, rowH, colors.bg);
+        strokeRect(x, y, dayColW, rowH, colors.border);
+
+        const textW = dayColW - cellPad * 2;
+        let ty = y + cellPad + 2;
+
+        doc.fillColor(colors.fg).font('Helvetica-Bold').fontSize(8);
+        doc.text(slot.subject.name, x + cellPad, ty, { width: textW });
+        ty += doc.heightOfString(slot.subject.name, { width: textW }) + 2;
+
+        if (slot.room) {
+          const roomText = `Zimmer ${slot.room}`;
+          doc.fillColor(colors.fg).font('Helvetica').fontSize(7);
+          doc.text(roomText, x + cellPad, ty, { width: textW });
+          ty += doc.heightOfString(roomText, { width: textW }) + 2;
+        }
+
         const teacher = `${slot.teacher.firstName} ${slot.teacher.lastName}`;
-        doc.text(teacher, x + 4, ty, { width: dayColW - 8 });
+        doc.fillColor(colors.fg).font('Helvetica').fontSize(7);
+        doc.text(teacher, x + cellPad, ty, { width: textW });
       }
 
       y += rowH;
     }
 
-    // Feiertage / schulfrei
-    y += 14;
-    if (y + 40 > pageBottom) {
-      doc.addPage();
-      y = top;
-    }
+    // === Feiertage als gerahmte Tabelle ===
+    y += 16;
+    ensureSpace(50);
 
     doc.fillColor(BRAND_RED).font('Helvetica-Bold').fontSize(11);
-    doc.text('Unterrichtsfreie Zeit / Feiertage', left, y);
+    doc.text('Unterrichtsfreie Zeit / Feiertage', left, y, { lineBreak: false });
     y += 16;
 
+    const holColDate = pageWidth * 0.42;
+    const holColName = pageWidth - holColDate;
+    const holHeadH = 20;
+    const holRowH = 18;
+
+    ensureSpace(holHeadH + 20);
+    fillRect(left, y, holColDate, holHeadH, HEADER_BG);
+    fillRect(left + holColDate, y, holColName, holHeadH, HEADER_BG);
+    strokeRect(left, y, holColDate, holHeadH);
+    strokeRect(left + holColDate, y, holColName, holHeadH);
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
+    doc.text('Datum', left + 6, y + 6, { width: holColDate - 12, lineBreak: false });
+    doc.text('Bezeichnung', left + holColDate + 6, y + 6, {
+      width: holColName - 12,
+      lineBreak: false,
+    });
+    y += holHeadH;
+
     if (holidays.length === 0) {
-      doc.fillColor('#6B7280').font('Helvetica').fontSize(9);
-      doc.text('Keine Feiertage erfasst.', left, y);
-      y += 14;
+      ensureSpace(holRowH);
+      fillRect(left, y, pageWidth, holRowH, '#F9FAFB');
+      strokeRect(left, y, pageWidth, holRowH);
+      doc.fillColor('#6B7280').font('Helvetica').fontSize(8);
+      doc.text('Keine Feiertage erfasst.', left + 6, y + 5, {
+        width: pageWidth - 12,
+        lineBreak: false,
+      });
+      y += holRowH;
     } else {
-      doc.fillColor('#111827').font('Helvetica').fontSize(9);
-      for (const h of holidays) {
-        if (y + 14 > pageBottom) {
-          doc.addPage();
-          y = top;
-        }
+      holidays.forEach((h, idx) => {
+        ensureSpace(holRowH);
+        const bg = idx % 2 === 0 ? '#FFFFFF' : '#F3F4F6';
+        fillRect(left, y, holColDate, holRowH, bg);
+        fillRect(left + holColDate, y, holColName, holRowH, bg);
+        strokeRect(left, y, holColDate, holRowH);
+        strokeRect(left + holColDate, y, holColName, holRowH);
+
         const dateStr = h.date.toLocaleDateString('de-CH', {
-          weekday: 'long',
+          weekday: 'short',
           day: '2-digit',
-          month: 'long',
+          month: '2-digit',
           year: 'numeric',
         });
-        doc.font('Helvetica-Bold').text(h.name, left, y, { continued: true, width: pageWidth });
-        doc.font('Helvetica').fillColor('#4B5563').text(`  ·  ${dateStr}`);
-        doc.fillColor('#111827');
-        y += 13;
-      }
+        doc.fillColor('#111827').font('Helvetica').fontSize(8);
+        doc.text(dateStr, left + 6, y + 5, { width: holColDate - 12, lineBreak: false });
+        doc.font('Helvetica-Bold').text(h.name, left + holColDate + 6, y + 5, {
+          width: holColName - 12,
+          lineBreak: false,
+        });
+        y += holRowH;
+      });
     }
 
-    // Legende Fächer
-    if (subjectLegend.size > 0) {
-      y += 12;
-      if (y + 30 > pageBottom) {
-        doc.addPage();
-        y = top;
-      }
+    // === Legende mit Farbfeldern ===
+    if (subjectsUsed.length > 0) {
+      y += 16;
+      ensureSpace(40);
       doc.fillColor(BRAND_RED).font('Helvetica-Bold').fontSize(11);
-      doc.text('Legende (Fächer)', left, y);
+      doc.text('Legende (Fächer)', left, y, { lineBreak: false });
       y += 14;
-      doc.fillColor('#111827').font('Helvetica').fontSize(8);
-      const subjects = [...subjectLegend.keys()].sort((a, b) => a.localeCompare(b, 'de'));
-      for (const name of subjects) {
-        if (y + 12 > pageBottom) {
-          doc.addPage();
-          y = top;
+
+      const swatch = 12;
+      const gap = 8;
+      const colW = (pageWidth - gap) / 2;
+      let col = 0;
+      let rowY = y;
+
+      for (const name of subjectsUsed) {
+        ensureSpace(swatch + 8);
+        if (col === 0) rowY = y;
+        const x = left + col * (colW + gap);
+        const colors = subjectColor(name);
+
+        fillRect(x, rowY, swatch, swatch, colors.bg);
+        strokeRect(x, rowY, swatch, swatch, colors.border);
+        doc.fillColor('#111827').font('Helvetica').fontSize(8);
+        doc.text(name, x + swatch + 6, rowY + 2, {
+          width: colW - swatch - 10,
+          lineBreak: false,
+        });
+
+        col += 1;
+        if (col >= 2) {
+          col = 0;
+          y = rowY + swatch + 6;
         }
-        doc.text(`• ${name}`, left, y);
-        y += 11;
       }
+      if (col !== 0) y = rowY + swatch + 6;
     }
 
     doc.end();
