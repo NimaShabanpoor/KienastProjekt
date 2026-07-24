@@ -76,3 +76,16 @@ export const auditLogCsv = async (_req: Request, res: Response, next: NextFuncti
     sendCsv(res, 'audit-log.csv', csv);
   } catch (err) { next(err); }
 };
+
+export const timetablePdf = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const classId = req.query['classId'] as string;
+    if (!classId) {
+      res.status(400).json({ error: 'classId erforderlich.', code: 'MISSING_PARAMS' });
+      return;
+    }
+    const { buffer, className } = await exportsService.exportTimetablePdf(classId);
+    const safeName = className.replace(/[^\w\-äöüÄÖÜß]+/gi, '_');
+    sendPdf(res, `stundenplan-${safeName}.pdf`, buffer);
+  } catch (err) { next(err); }
+};

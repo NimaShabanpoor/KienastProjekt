@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileText, BarChart2, Users } from 'lucide-react';
+import { Download, FileText, BarChart2, Users, CalendarDays } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import type { Class } from '@schuladmin/shared';
 
@@ -15,6 +15,7 @@ interface AbsenceStats {
 
 export default function ExportsPage() {
   const [gradesClassId, setGradesClassId] = useState('');
+  const [timetableClassId, setTimetableClassId] = useState('');
   const [promoClassId, setPromoClassId] = useState('');
   const [schoolYear, setSchoolYear] = useState('2024/25');
 
@@ -102,6 +103,37 @@ export default function ExportsPage() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-neutral-200 p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 bg-sky-50 rounded-lg"><CalendarDays className="w-4 h-4 text-sky-700" /></div>
+            <h3 className="font-semibold text-neutral-900">Stundenplan (PDF)</h3>
+          </div>
+          <p className="text-sm text-neutral-500 mb-4">
+            Wochenraster mit Fach, Zimmer, Lehrperson und Feiertagen – Querformat wie Schulvorlage
+          </p>
+          <select
+            value={timetableClassId}
+            onChange={(e) => setTimetableClassId(e.target.value)}
+            className="w-full mb-3 px-2 py-1.5 border rounded-lg text-sm"
+          >
+            <option value="">Klasse wählen</option>
+            {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button
+            disabled={!timetableClassId}
+            onClick={() => {
+              const className = classes?.find((c) => c.id === timetableClassId)?.name ?? 'klasse';
+              void handleExport(
+                `/api/v1/exports/timetable/pdf?classId=${timetableClassId}`,
+                `stundenplan-${className}.pdf`
+              );
+            }}
+            className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" /> PDF exportieren
+          </button>
+        </div>
+
         <div className="bg-white rounded-xl border border-neutral-200 p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-orange-50 rounded-lg"><Users className="w-4 h-4 text-orange-600" /></div>
