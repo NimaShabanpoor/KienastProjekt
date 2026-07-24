@@ -69,15 +69,32 @@ type DraftRow = {
 };
 
 const SUBJECT_COLORS = [
-  'bg-sky-100 border-sky-300 text-sky-900',
-  'bg-emerald-100 border-emerald-300 text-emerald-900',
-  'bg-amber-100 border-amber-300 text-amber-900',
-  'bg-violet-100 border-violet-300 text-violet-900',
-  'bg-rose-100 border-rose-300 text-rose-900',
-  'bg-cyan-100 border-cyan-300 text-cyan-900',
-  'bg-lime-100 border-lime-300 text-lime-900',
-  'bg-orange-100 border-orange-300 text-orange-900',
+  'bg-sky-50 border-sky-200/80 text-sky-950',
+  'bg-emerald-50 border-emerald-200/80 text-emerald-950',
+  'bg-amber-50 border-amber-200/80 text-amber-950',
+  'bg-violet-50 border-violet-200/80 text-violet-950',
+  'bg-rose-50 border-rose-200/80 text-rose-950',
+  'bg-cyan-50 border-cyan-200/80 text-cyan-950',
+  'bg-lime-50 border-lime-200/80 text-lime-950',
+  'bg-orange-50 border-orange-200/80 text-orange-950',
 ];
+
+const WEEKDAY_FULL: Record<number, string> = {
+  1: 'Montag',
+  2: 'Dienstag',
+  3: 'Mittwoch',
+  4: 'Donnerstag',
+  5: 'Freitag',
+};
+
+const fieldClass =
+  'h-10 w-full px-3 border border-neutral-300 rounded-lg text-sm text-neutral-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red';
+const btnPrimary =
+  'inline-flex h-10 items-center justify-center gap-2 px-4 rounded-lg bg-brand-red text-white text-sm font-medium hover:bg-brand-red-dark transition-colors disabled:opacity-50 disabled:pointer-events-none';
+const btnSecondary =
+  'inline-flex h-10 items-center justify-center gap-2 px-4 rounded-lg border border-neutral-300 bg-white text-neutral-700 text-sm font-medium hover:bg-neutral-50 transition-colors disabled:opacity-50';
+const btnGhost =
+  'inline-flex h-10 items-center justify-center gap-2 px-3 rounded-lg text-sm font-medium text-neutral-600 hover:bg-neutral-100 transition-colors';
 
 function subjectColor(name: string): string {
   let hash = 0;
@@ -462,412 +479,443 @@ export default function TimetablePage() {
     endTime: p.endTime,
     period: p.period,
   }));
+  const selectedClass = classes?.find((c) => c.id === classId);
+
+  const holidayEditor = (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-neutral-900">Feiertag / schulfrei</h3>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Gilt für alle Klassen – an diesen Tagen findet kein Unterricht statt.
+        </p>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="date"
+          value={holidayDate}
+          onChange={(e) => setHolidayDate(e.target.value)}
+          className={`${fieldClass} sm:w-40`}
+        />
+        <input
+          type="text"
+          value={holidayName}
+          onChange={(e) => setHolidayName(e.target.value)}
+          placeholder="z.B. Bundesfeiertag"
+          className={fieldClass}
+        />
+        <button
+          type="button"
+          onClick={() => saveHolidayMutation.mutate()}
+          disabled={saveHolidayMutation.isPending || !holidayDate || !holidayName.trim()}
+          className={`${btnPrimary} shrink-0`}
+        >
+          Hinzufügen
+        </button>
+      </div>
+      {holidaySaveError && (
+        <p className="text-sm text-error">{holidaySaveError}</p>
+      )}
+      {(holidays?.length ?? 0) === 0 ? (
+        <p className="text-sm text-neutral-400 py-2">Noch keine Feiertage erfasst.</p>
+      ) : (
+        <ul className="rounded-lg border border-neutral-200 divide-y divide-neutral-100 overflow-hidden bg-white">
+          {holidays!.map((h) => (
+            <li key={h.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-neutral-900 truncate">{h.name}</p>
+                <p className="text-xs text-neutral-500 mt-0.5">{holidayDateLabel(h.date)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => deleteHolidayMutation.mutate(h.id)}
+                disabled={deleteHolidayMutation.isPending}
+                className="p-2 rounded-md text-neutral-400 hover:text-error hover:bg-red-50 transition-colors"
+                title="Feiertag entfernen"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
-        <div className="flex items-center gap-3">
-          <CalendarDays className="w-6 h-6 text-brand-red" />
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-red-light text-brand-red">
+            <CalendarDays className="w-5 h-5" />
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-neutral-900">Stundenplan</h1>
-            <p className="text-sm text-neutral-500">
-              Wochenvorlage pro Klasse – gilt für das ganze Semester
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Stundenplan</h1>
+            <p className="text-sm text-neutral-500 mt-1 max-w-xl leading-relaxed">
+              Wochenvorlage pro Klasse für das Semester. Zeiten, Feiertage und Ausnahmen zentral pflegen.
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={openTimesEditor}
-          className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-neutral-300 rounded-lg hover:bg-neutral-50 text-neutral-700"
-        >
+        <button type="button" onClick={openTimesEditor} className={`${btnSecondary} shrink-0`}>
           <Clock className="w-4 h-4" />
           Zeiten bearbeiten
         </button>
       </div>
 
-      <div className="mb-6 max-w-md">
-        <label className="block text-sm font-semibold text-neutral-800 mb-2">Klasse auswählen</label>
-        <select
-          value={classId}
-          onChange={(e) => {
-            setClassId(e.target.value);
-            setExceptionDate('');
-            setShowExceptionPanel(false);
-            closeEditor();
-          }}
-          className="w-full px-4 py-3 border-2 border-neutral-300 rounded-xl text-base font-medium bg-white shadow-sm focus:outline-none focus:border-neutral-500 focus:ring-0"
-        >
-          <option value="">— Klasse wählen —</option>
-          {classes?.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+      {/* Toolbar */}
+      <div className="mb-6 rounded-xl border border-neutral-200 bg-white p-4 sm:p-5 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+          <div className="flex-1 min-w-0 max-w-md">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500 mb-1.5">
+              Klasse
+            </label>
+            <select
+              value={classId}
+              onChange={(e) => {
+                setClassId(e.target.value);
+                setExceptionDate('');
+                setShowExceptionPanel(false);
+                closeEditor();
+              }}
+              className={fieldClass}
+            >
+              <option value="">— Klasse wählen —</option>
+              {classes?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.schoolYear ? ` · ${c.schoolYear}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          {classId && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowExceptionPanel((v) => !v)}
+                className={showExceptionPanel ? btnPrimary : btnSecondary}
+              >
+                <CalendarRange className="w-4 h-4" />
+                {showExceptionPanel ? 'Panel schliessen' : 'Ausnahme & Feiertag'}
+              </button>
+            </div>
+          )}
+        </div>
+        {selectedClass && (
+          <p className="mt-3 text-sm text-neutral-600">
+            Aktuell:{' '}
+            <span className="font-semibold text-neutral-900">{selectedClass.name}</span>
+            {selectedClass.schoolYear ? (
+              <span className="text-neutral-500"> · Schuljahr {selectedClass.schoolYear}</span>
+            ) : null}
+          </p>
+        )}
       </div>
 
-      {classId && (
-        <div className="mb-6 space-y-4">
-          {!showExceptionPanel ? (
-            <button
-              type="button"
-              onClick={() => setShowExceptionPanel(true)}
-              className="inline-flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700 transition-colors"
-            >
-              <CalendarRange className="w-4 h-4" />
-              Ausnahme / Feiertag für ein einzelnes Datum erfassen…
-            </button>
-          ) : (
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50/80 px-4 py-3 max-w-xl space-y-5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-neutral-600 uppercase tracking-wide">
-                  Ausnahme & Feiertag
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowExceptionPanel(false);
-                    setExceptionDate('');
-                  }}
-                  className="text-xs text-neutral-400 hover:text-neutral-600"
-                >
-                  Schliessen
-                </button>
-              </div>
-
+      {/* Ausnahme-/Feiertags-Panel */}
+      {classId && showExceptionPanel && (
+        <div className="mb-6 rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+          <div className="grid lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-neutral-200">
+            <div className="p-4 sm:p-5 space-y-3">
               <div>
-                <p className="text-sm font-medium text-neutral-800 mb-1">Ausnahme für diese Klasse</p>
-                <p className="text-xs text-neutral-500 mb-2">
+                <h3 className="text-sm font-semibold text-neutral-900">Ausnahme für diese Klasse</h3>
+                <p className="text-xs text-neutral-500 mt-0.5 leading-relaxed">
                   Stellvertretung, Verschiebung oder Ausfall – die Wochenvorlage bleibt unverändert.
                 </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1.5">Datum</label>
                 <input
                   type="date"
                   value={exceptionDate}
                   onChange={(e) => setExceptionDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white text-neutral-700 focus:outline-none focus:border-neutral-400"
+                  className={`${fieldClass} max-w-xs`}
                 />
               </div>
-
-              <div className="border-t border-neutral-200 pt-4">
-                <p className="text-sm font-medium text-neutral-800 mb-1">Feiertag / schulfrei (alle Klassen)</p>
-                <p className="text-xs text-neutral-500 mb-3">
-                  An diesem Tag findet kein Unterricht statt.
-                </p>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <input
-                    type="date"
-                    value={holidayDate}
-                    onChange={(e) => setHolidayDate(e.target.value)}
-                    className="px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white"
-                  />
-                  <input
-                    type="text"
-                    value={holidayName}
-                    onChange={(e) => setHolidayName(e.target.value)}
-                    placeholder="z.B. Bundesfeiertag"
-                    className="flex-1 min-w-[10rem] px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => saveHolidayMutation.mutate()}
-                    disabled={
-                      saveHolidayMutation.isPending || !holidayDate || !holidayName.trim()
-                    }
-                    className="px-3 py-2 text-sm rounded-lg bg-brand-red text-white disabled:opacity-50"
-                  >
-                    Hinzufügen
-                  </button>
-                </div>
-                {holidaySaveError && (
-                  <p className="text-sm text-red-600 mb-2">{holidaySaveError}</p>
-                )}
-                {(holidays?.length ?? 0) === 0 ? (
-                  <p className="text-xs text-neutral-400">Noch keine Feiertage erfasst.</p>
-                ) : (
-                  <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white overflow-hidden">
-                    {holidays!.map((h) => (
-                      <li key={h.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                        <div>
-                          <div className="font-medium text-neutral-800">{h.name}</div>
-                          <div className="text-xs text-neutral-500">{holidayDateLabel(h.date)}</div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => deleteHolidayMutation.mutate(h.id)}
-                          disabled={deleteHolidayMutation.isPending}
-                          className="p-1.5 text-neutral-400 hover:text-red-600"
-                          title="Feiertag entfernen"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
             </div>
-          )}
-
-          {!showExceptionPanel && (holidays?.length ?? 0) > 0 && (
-            <div className="max-w-xl">
-              <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">
-                Feiertage / schulfrei
-              </p>
-              <ul className="rounded-lg border border-neutral-200 bg-white divide-y divide-neutral-100 text-sm">
-                {holidays!.map((h) => (
-                  <li key={h.id} className="px-3 py-2 flex justify-between gap-3">
-                    <span className="font-medium text-neutral-800">{h.name}</span>
-                    <span className="text-neutral-500 text-xs whitespace-nowrap">
-                      {holidayDateLabel(h.date)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            <div className="p-4 sm:p-5">{holidayEditor}</div>
+          </div>
         </div>
       )}
 
-      {!classId && (
-        <div className="space-y-4 mb-6">
-          <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50/50 p-12 text-center text-neutral-500">
-            Bitte zuerst eine Klasse auswählen, um den Stundenplan anzuzeigen oder zu bearbeiten.
-            <p className="mt-3 text-sm">
-              Lektions- und Pausenzeiten kannst du jederzeit über «Zeiten bearbeiten» anpassen.
+      {/* Feiertags-Kurzliste wenn Panel zu */}
+      {classId && !showExceptionPanel && (holidays?.length ?? 0) > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Feiertage / schulfrei
             </p>
+            <button type="button" onClick={() => setShowExceptionPanel(true)} className="text-xs font-medium text-brand-red hover:underline">
+              Verwalten
+            </button>
           </div>
-          <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3 max-w-xl">
-            <p className="text-sm font-medium text-neutral-800 mb-1">Feiertage / schulfrei</p>
-            <p className="text-xs text-neutral-500 mb-3">
-              Gilt für alle Klassen – an diesen Tagen findet kein Unterricht statt.
-            </p>
-            <div className="flex flex-wrap gap-2 mb-3">
-              <input
-                type="date"
-                value={holidayDate}
-                onChange={(e) => setHolidayDate(e.target.value)}
-                className="px-3 py-2 border border-neutral-200 rounded-lg text-sm"
-              />
-              <input
-                type="text"
-                value={holidayName}
-                onChange={(e) => setHolidayName(e.target.value)}
-                placeholder="z.B. Bundesfeiertag"
-                className="flex-1 min-w-[10rem] px-3 py-2 border border-neutral-200 rounded-lg text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => saveHolidayMutation.mutate()}
-                disabled={saveHolidayMutation.isPending || !holidayDate || !holidayName.trim()}
-                className="px-3 py-2 text-sm rounded-lg bg-brand-red text-white disabled:opacity-50"
+          <div className="flex flex-wrap gap-2">
+            {holidays!.slice(0, 8).map((h) => (
+              <span
+                key={h.id}
+                className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-700"
               >
-                Hinzufügen
-              </button>
-            </div>
-            {holidaySaveError && <p className="text-sm text-red-600 mb-2">{holidaySaveError}</p>}
-            {(holidays?.length ?? 0) === 0 ? (
-              <p className="text-xs text-neutral-400">Noch keine Feiertage erfasst.</p>
-            ) : (
-              <ul className="divide-y divide-neutral-100 border border-neutral-200 rounded-lg overflow-hidden">
-                {holidays!.map((h) => (
-                  <li key={h.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                    <div>
-                      <div className="font-medium text-neutral-800">{h.name}</div>
-                      <div className="text-xs text-neutral-500">{holidayDateLabel(h.date)}</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => deleteHolidayMutation.mutate(h.id)}
-                      className="p-1.5 text-neutral-400 hover:text-red-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                <span className="font-medium">{h.name}</span>
+                <span className="text-neutral-400">{holidayDateLabel(h.date)}</span>
+              </span>
+            ))}
+            {(holidays?.length ?? 0) > 8 && (
+              <span className="text-xs text-neutral-400 self-center">+{(holidays!.length - 8)} weitere</span>
             )}
           </div>
         </div>
       )}
 
+      {!classId && (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-14 text-center">
+            <CalendarDays className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
+            <p className="text-base font-medium text-neutral-700">Klasse auswählen</p>
+            <p className="text-sm text-neutral-500 mt-1 max-w-md mx-auto leading-relaxed">
+              Wähle oben eine Klasse, um den Wochenstundenplan zu bearbeiten.
+              Zeiten und Feiertage kannst du unabhängig davon pflegen.
+            </p>
+          </div>
+          <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm max-w-2xl">
+            {holidayEditor}
+          </div>
+        </div>
+      )}
+
       {classId && isLoading && (
-        <div className="p-8 text-center text-neutral-400">Laden...</div>
+        <div className="rounded-xl border border-neutral-200 bg-white py-16 text-center text-sm text-neutral-400">
+          Stundenplan wird geladen…
+        </div>
       )}
 
       {classId && !isLoading && (
         <>
           {isExceptionMode && holidayOnExceptionDate && (
-            <div className="mb-4 text-sm bg-sky-50 border border-sky-200 text-sky-900 rounded-lg px-3 py-2">
-              Schulfrei am {exceptionDate}: «{holidayOnExceptionDate.name}» – kein Unterricht, Zellen nicht bearbeitbar.
+            <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+              <span className="font-semibold">Schulfrei</span>
+              {' · '}
+              {exceptionDate}: «{holidayOnExceptionDate.name}» – Zellen sind gesperrt.
             </div>
           )}
           {isExceptionMode && !holidayOnExceptionDate && (
-            <div className="mb-4 text-sm bg-amber-50/80 border border-amber-200/80 text-amber-900 rounded-lg px-3 py-2">
-              Ausnahme-Modus für {exceptionDate} ({WEEKDAY_LABELS[exceptionDayOfWeek!]}) –
-              Änderungen betreffen nur dieses Datum.
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <span className="font-semibold">Ausnahme-Modus</span>
+              {' · '}
+              {exceptionDate} ({WEEKDAY_FULL[exceptionDayOfWeek!]}) – Änderungen gelten nur für dieses Datum.
             </div>
           )}
           {exceptionDate && exceptionDayOfWeek === null && (
-            <div className="mb-4 text-sm bg-neutral-100 border border-neutral-200 text-neutral-600 rounded-lg px-3 py-2">
-              Ausnahmen sind nur für Werktage (Mo–Fr) möglich. Feiertage kannst du trotzdem oben erfassen.
+            <div className="mb-4 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600">
+              Ausnahmen nur Mo–Fr. Feiertage kannst du trotzdem im Panel erfassen.
             </div>
           )}
 
-          <div className="rounded-xl border border-neutral-200 bg-white overflow-x-auto shadow-sm">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 z-10 p-3 text-left text-[11px] font-medium text-neutral-400 uppercase tracking-wider w-[7.5rem] bg-neutral-100 border-b border-r border-neutral-200">
-                    Periode
-                  </th>
-                  {[1, 2, 3, 4, 5].map((d) => (
-                    <th
-                      key={d}
-                      className={`p-3 text-center text-xs font-medium border-b border-neutral-200 ${
-                        isExceptionMode && exceptionDayOfWeek === d
-                          ? 'bg-amber-50/60 text-amber-800'
-                          : isExceptionMode
-                            ? 'bg-white text-neutral-300'
-                            : 'bg-white text-neutral-500'
-                      }`}
-                    >
-                      {WEEKDAY_LABELS[d]}
+          <div className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px] border-collapse table-fixed">
+                <thead>
+                  <tr className="bg-neutral-50">
+                    <th className="sticky left-0 z-10 w-[7.5rem] sm:w-36 p-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500 border-b border-r border-neutral-200 bg-neutral-50">
+                      Zeit
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {gridRows.map((row, rowIdx) => {
-                  if (row.type === 'BREAK') {
+                    {[1, 2, 3, 4, 5].map((d) => (
+                      <th
+                        key={d}
+                        className={`p-3 text-center border-b border-neutral-200 ${
+                          isExceptionMode && exceptionDayOfWeek === d
+                            ? 'bg-amber-50 text-amber-900'
+                            : isExceptionMode
+                              ? 'text-neutral-300'
+                              : 'text-neutral-700'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">{WEEKDAY_LABELS[d]}</span>
+                        <span className="hidden sm:block text-[11px] font-normal text-neutral-400 mt-0.5">
+                          {WEEKDAY_FULL[d]}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {gridRows.map((row, rowIdx) => {
+                    if (row.type === 'BREAK') {
+                      return (
+                        <tr key={`break-${rowIdx}-${row.label}`}>
+                          <td
+                            colSpan={6}
+                            className="px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400 bg-neutral-100/90 border-y border-neutral-200"
+                          >
+                            {row.label}
+                            {row.startTime && row.endTime ? (
+                              <span className="font-mono font-normal normal-case tracking-normal ml-2 text-neutral-400">
+                                {row.startTime}–{row.endTime}
+                              </span>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    const periodNum = row.period!;
                     return (
-                      <tr key={`break-${rowIdx}-${row.label}`}>
-                        <td
-                          colSpan={6}
-                          className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.15em] text-neutral-400 bg-neutral-100 border-y border-neutral-200"
-                        >
-                          — {row.label}
-                          {row.startTime && row.endTime ? ` (${row.startTime}–${row.endTime})` : ''} —
-                        </td>
-                      </tr>
-                    );
-                  }
+                      <Fragment key={`lesson-${periodNum}`}>
+                        <tr>
+                          <td className="sticky left-0 z-10 p-3 align-middle bg-white border-r border-b border-neutral-200">
+                            <div className="text-sm font-semibold text-neutral-900 leading-tight">
+                              {row.label}
+                            </div>
+                            <div className="text-xs text-neutral-500 font-mono mt-1 tabular-nums">
+                              {row.startTime}–{row.endTime}
+                            </div>
+                          </td>
+                          {[1, 2, 3, 4, 5].map((day) => {
+                            const slot = slotsByKey.get(`${day}-${periodNum}`);
+                            const ex =
+                              isExceptionMode && exceptionDayOfWeek === day
+                                ? exceptionByPeriod.get(periodNum)
+                                : undefined;
+                            const dimmed =
+                              Boolean(holidayOnExceptionDate) ||
+                              (isExceptionMode && exceptionDayOfWeek !== day);
+                            const clickable = !dimmed;
+                            const hasContent = Boolean(slot || ex);
 
-                  const periodNum = row.period!;
-                  return (
-                    <Fragment key={`lesson-${periodNum}`}>
-                      <tr className="group/row">
-                        <td className="sticky left-0 z-10 p-3 align-middle bg-neutral-50 border-r border-b border-neutral-200">
-                          <div className="text-xs font-semibold text-neutral-700">{row.label}</div>
-                          <div className="text-[10px] text-neutral-400 font-mono mt-0.5">
-                            {row.startTime}–{row.endTime}
-                          </div>
-                        </td>
-                        {[1, 2, 3, 4, 5].map((day) => {
-                          const slot = slotsByKey.get(`${day}-${periodNum}`);
-                          const ex =
-                            isExceptionMode && exceptionDayOfWeek === day
-                              ? exceptionByPeriod.get(periodNum)
-                              : undefined;
-                          const dimmed = isExceptionMode && exceptionDayOfWeek !== day;
-                          const clickable = !dimmed;
-                          const hasContent = Boolean(slot || ex);
+                            let displayName = slot?.subject?.name;
+                            let displayTeacher = slot?.teacher
+                              ? `${slot.teacher.firstName} ${slot.teacher.lastName}`
+                              : '';
+                            let displayRoom = slot?.room;
+                            let cancelled = false;
+                            let color = slot ? subjectColor(slot.subject?.name ?? '') : '';
 
-                          let displayName = slot?.subject?.name;
-                          let displayTeacher = slot?.teacher
-                            ? `${slot.teacher.firstName} ${slot.teacher.lastName}`
-                            : '';
-                          let displayRoom = slot?.room;
-                          let cancelled = false;
-                          let color = slot ? subjectColor(slot.subject?.name ?? '') : '';
+                            if (ex?.type === 'CANCEL') {
+                              cancelled = true;
+                              displayName = 'Ausfall';
+                              displayTeacher = '';
+                              displayRoom = null;
+                              color = 'bg-neutral-50 border-neutral-200 text-neutral-400';
+                            } else if (ex?.type === 'OVERRIDE') {
+                              displayName = ex.subject?.name ?? displayName;
+                              displayTeacher = ex.teacher
+                                ? `${ex.teacher.firstName} ${ex.teacher.lastName}`
+                                : displayTeacher;
+                              displayRoom = ex.room;
+                              color = subjectColor(displayName ?? 'x');
+                            }
 
-                          if (ex?.type === 'CANCEL') {
-                            cancelled = true;
-                            displayName = 'Ausfall';
-                            displayTeacher = '';
-                            displayRoom = null;
-                            color = 'bg-neutral-100 border-neutral-200 text-neutral-400';
-                          } else if (ex?.type === 'OVERRIDE') {
-                            displayName = ex.subject?.name ?? displayName;
-                            displayTeacher = ex.teacher
-                              ? `${ex.teacher.firstName} ${ex.teacher.lastName}`
-                              : displayTeacher;
-                            displayRoom = ex.room;
-                            color = subjectColor(displayName ?? 'x');
-                          }
-
-                          return (
-                            <td key={`${day}-${periodNum}`} className="p-1.5 align-top border-b border-neutral-100">
-                              <button
-                                type="button"
-                                disabled={!clickable}
-                                onClick={() => openCell(day, periodNum)}
-                                className={`w-full min-h-[68px] rounded-md border text-left p-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 focus-visible:ring-offset-1 ${
-                                  dimmed
-                                    ? 'opacity-25 cursor-not-allowed border-neutral-100 bg-neutral-50/50'
-                                    : hasContent
-                                      ? `${color} border hover:brightness-[0.98]`
-                                      : 'border-neutral-200 bg-neutral-50/40 hover:bg-neutral-100/80 hover:border-neutral-300'
-                                }`}
+                            return (
+                              <td
+                                key={`${day}-${periodNum}`}
+                                className="p-1.5 align-top border-b border-neutral-100"
                               >
-                                {hasContent ? (
-                                  <div className="space-y-0.5">
-                                    <div className={`font-semibold text-xs leading-tight ${cancelled ? 'line-through' : ''}`}>
-                                      {displayName}
-                                      {(slot?.isTest || ex?.isTest) && !cancelled && (
-                                        <span className="ml-1 text-[9px] font-bold uppercase opacity-70">Test</span>
+                                <button
+                                  type="button"
+                                  disabled={!clickable}
+                                  onClick={() => openCell(day, periodNum)}
+                                  className={`w-full h-full min-h-[76px] rounded-lg border text-left p-2.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-red/30 focus-visible:ring-offset-1 ${
+                                    dimmed
+                                      ? 'opacity-30 cursor-not-allowed border-neutral-100 bg-neutral-50'
+                                      : hasContent
+                                        ? `${color} hover:shadow-sm hover:border-neutral-300`
+                                        : 'border-dashed border-neutral-200 bg-neutral-50/50 hover:bg-neutral-100 hover:border-neutral-300 text-neutral-300'
+                                  }`}
+                                >
+                                  {hasContent ? (
+                                    <div className="space-y-1">
+                                      <div
+                                        className={`text-sm font-semibold leading-snug ${
+                                          cancelled ? 'line-through' : ''
+                                        }`}
+                                      >
+                                        {displayName}
+                                        {(slot?.isTest || ex?.isTest) && !cancelled && (
+                                          <span className="ml-1.5 align-middle inline-block rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide opacity-80">
+                                            Test
+                                          </span>
+                                        )}
+                                      </div>
+                                      {displayTeacher && (
+                                        <div className="text-xs opacity-80 truncate leading-tight">
+                                          {displayTeacher}
+                                        </div>
+                                      )}
+                                      {displayRoom && (
+                                        <div className="text-[11px] opacity-60 leading-tight">
+                                          Raum {displayRoom}
+                                        </div>
                                       )}
                                     </div>
-                                    {displayTeacher && (
-                                      <div className="text-[10px] opacity-75 truncate">{displayTeacher}</div>
-                                    )}
-                                    {displayRoom && (
-                                      <div className="text-[10px] opacity-60">Raum {displayRoom}</div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-center h-full min-h-[52px] text-neutral-300">
-                                    <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
-                                  </div>
-                                )}
-                              </button>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                                  ) : (
+                                    <div className="flex items-center justify-center h-full min-h-[56px]">
+                                      <Plus className="w-4 h-4" strokeWidth={1.75} />
+                                    </div>
+                                  )}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-3 border-t border-neutral-100 bg-neutral-50/80 text-xs text-neutral-500">
+              Klicke eine Zelle, um Fach, Lehrperson und Raum zu setzen.
+            </div>
           </div>
         </>
       )}
 
       {showTimesEditor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4 backdrop-blur-[1px]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-neutral-200">
               <div>
-                <h2 className="font-semibold text-lg">Tageszeiten bearbeiten</h2>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  Lektionen und Pausen mit Start-/Endzeit – gilt für alle Klassen.
+                <h2 className="text-lg font-bold text-neutral-900">Tageszeiten</h2>
+                <p className="text-sm text-neutral-500 mt-0.5">
+                  Lektionen und Pausen – gilt für alle Klassen.
                 </p>
               </div>
-              <button type="button" onClick={() => setShowTimesEditor(false)} className="text-neutral-400 hover:text-neutral-700">
+              <button
+                type="button"
+                onClick={() => setShowTimesEditor(false)}
+                className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-2">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
               {draftRows.map((row, idx) => (
                 <div
                   key={row.key}
-                  className={`flex flex-wrap items-center gap-2 p-3 rounded-lg border ${
-                    row.type === 'BREAK' ? 'bg-neutral-50 border-neutral-200' : 'bg-white border-neutral-200'
+                  className={`flex flex-wrap items-center gap-2 p-3 rounded-xl border ${
+                    row.type === 'BREAK'
+                      ? 'bg-neutral-50 border-neutral-200'
+                      : 'bg-white border-neutral-200'
                   }`}
                 >
-                  <div className="flex flex-col gap-0.5 text-neutral-400">
-                    <button type="button" onClick={() => moveDraftRow(row.key, -1)} disabled={idx === 0} className="disabled:opacity-30 text-xs px-1">↑</button>
-                    <GripVertical className="w-4 h-4 mx-auto" />
-                    <button type="button" onClick={() => moveDraftRow(row.key, 1)} disabled={idx === draftRows.length - 1} className="disabled:opacity-30 text-xs px-1">↓</button>
+                  <div className="flex flex-col items-center gap-0.5 text-neutral-400 w-7">
+                    <button
+                      type="button"
+                      onClick={() => moveDraftRow(row.key, -1)}
+                      disabled={idx === 0}
+                      className="disabled:opacity-30 text-xs leading-none px-1 py-0.5 hover:text-neutral-700"
+                    >
+                      ↑
+                    </button>
+                    <GripVertical className="w-3.5 h-3.5" />
+                    <button
+                      type="button"
+                      onClick={() => moveDraftRow(row.key, 1)}
+                      disabled={idx === draftRows.length - 1}
+                      className="disabled:opacity-30 text-xs leading-none px-1 py-0.5 hover:text-neutral-700"
+                    >
+                      ↓
+                    </button>
                   </div>
                   <select
                     value={row.type}
@@ -878,7 +926,7 @@ export default function TimetablePage() {
                         label: type === 'BREAK' ? (row.label.includes('Lektion') ? 'Pause' : row.label) : row.label,
                       });
                     }}
-                    className="px-2 py-1.5 border rounded-md text-sm w-[7.5rem]"
+                    className="h-9 px-2 border border-neutral-300 rounded-lg text-sm w-[7.25rem] bg-white"
                   >
                     <option value="LESSON">Lektion</option>
                     <option value="BREAK">Pause</option>
@@ -886,14 +934,14 @@ export default function TimetablePage() {
                   <input
                     value={row.label}
                     onChange={(e) => updateDraft(row.key, { label: e.target.value })}
-                    className="flex-1 min-w-[8rem] px-2 py-1.5 border rounded-md text-sm"
+                    className="h-9 flex-1 min-w-[8rem] px-2.5 border border-neutral-300 rounded-lg text-sm"
                     placeholder="Bezeichnung"
                   />
                   <input
                     type="time"
                     value={row.startTime}
                     onChange={(e) => updateDraft(row.key, { startTime: e.target.value })}
-                    className="px-2 py-1.5 border rounded-md text-sm"
+                    className="h-9 px-2 border border-neutral-300 rounded-lg text-sm"
                     title="Start"
                   />
                   <span className="text-neutral-400 text-xs">bis</span>
@@ -901,13 +949,13 @@ export default function TimetablePage() {
                     type="time"
                     value={row.endTime}
                     onChange={(e) => updateDraft(row.key, { endTime: e.target.value })}
-                    className="px-2 py-1.5 border rounded-md text-sm"
+                    className="h-9 px-2 border border-neutral-300 rounded-lg text-sm"
                     title="Ende"
                   />
                   <button
                     type="button"
                     onClick={() => removeDraftRow(row.key)}
-                    className="p-1.5 text-neutral-400 hover:text-red-600"
+                    className="p-2 rounded-lg text-neutral-400 hover:text-error hover:bg-red-50"
                     title="Zeile entfernen"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -916,140 +964,166 @@ export default function TimetablePage() {
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => addDraftRow('LESSON')}
-                className="text-sm px-3 py-1.5 border border-neutral-300 rounded-lg hover:bg-neutral-50"
-              >
-                + Lektion
-              </button>
-              <button
-                type="button"
-                onClick={() => addDraftRow('BREAK')}
-                className="text-sm px-3 py-1.5 border border-neutral-300 rounded-lg hover:bg-neutral-50"
-              >
-                + Pause
-              </button>
+            <div className="px-5 py-4 border-t border-neutral-200 space-y-3 bg-neutral-50/50">
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => addDraftRow('LESSON')} className={btnSecondary}>
+                  + Lektion
+                </button>
+                <button type="button" onClick={() => addDraftRow('BREAK')} className={btnSecondary}>
+                  + Pause
+                </button>
+              </div>
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                Entfernte Lektionen löschen auch zugehörige Stundenplan-Einträge dieser Perioden.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => saveStructureMutation.mutate()}
+                  disabled={saveStructureMutation.isPending || draftRows.length === 0}
+                  className={btnPrimary}
+                >
+                  Zeiten speichern
+                </button>
+                <button type="button" onClick={() => setShowTimesEditor(false)} className={btnGhost}>
+                  Abbrechen
+                </button>
+              </div>
+              {saveStructureMutation.isError && (
+                <p className="text-sm text-error">Speichern fehlgeschlagen. Zeiten und Bezeichnungen prüfen.</p>
+              )}
             </div>
-
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              Hinweis: Entfernte Lektionen löschen auch zugehörige Stundenplan-Einträge dieser Perioden.
-            </p>
-
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => saveStructureMutation.mutate()}
-                disabled={saveStructureMutation.isPending || draftRows.length === 0}
-                className="bg-brand-red text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50"
-              >
-                Zeiten speichern
-              </button>
-              <button type="button" onClick={() => setShowTimesEditor(false)} className="text-neutral-600 px-3 py-2 text-sm">
-                Abbrechen
-              </button>
-            </div>
-            {saveStructureMutation.isError && (
-              <p className="text-sm text-red-600">Speichern fehlgeschlagen. Zeiten und Bezeichnungen prüfen.</p>
-            )}
           </div>
         </div>
       )}
 
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-lg">
-                {WEEKDAY_LABELS[editing.dayOfWeek]} ·{' '}
-                {periods.find((p) => p.period === editing.period)?.label ?? `${editing.period}. Lektion`}
-              </h2>
-              <button type="button" onClick={closeEditor} className="text-neutral-400 hover:text-neutral-700">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4 backdrop-blur-[1px]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-neutral-200">
+              <div>
+                <h2 className="text-lg font-bold text-neutral-900">
+                  {WEEKDAY_FULL[editing.dayOfWeek] ?? WEEKDAY_LABELS[editing.dayOfWeek]}
+                </h2>
+                <p className="text-sm text-neutral-500 mt-0.5">
+                  {periods.find((p) => p.period === editing.period)?.label ?? `${editing.period}. Lektion`}
+                  {periods.find((p) => p.period === editing.period) && (
+                    <span className="font-mono text-neutral-400 ml-2">
+                      {periods.find((p) => p.period === editing.period)!.startTime}
+                      –
+                      {periods.find((p) => p.period === editing.period)!.endTime}
+                    </span>
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditor}
+                className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-neutral-500">
-              {isExceptionMode
-                ? `Ausnahme für ${exceptionDate} – Vorlage bleibt unverändert.`
-                : 'Eintrag in der Wochenvorlage (gilt jedes Semester).'}
-            </p>
 
-            {isExceptionMode && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={exceptionCancel}
-                  onChange={(e) => setExceptionCancel(e.target.checked)}
-                />
-                Ausfall an diesem Datum
-              </label>
-            )}
+            <div className="px-5 py-4 space-y-4">
+              <p className="text-xs text-neutral-500 leading-relaxed">
+                {isExceptionMode
+                  ? `Ausnahme für ${exceptionDate} – Vorlage bleibt unverändert.`
+                  : 'Eintrag in der Wochenvorlage (gilt für das Semester).'}
+              </p>
 
-            {!exceptionCancel && (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1">Fach *</label>
-                  <select
-                    required
-                    value={subjectId}
-                    onChange={(e) => onSubjectChange(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                  >
-                    <option value="">Fach wählen</option>
-                    {subjects?.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1">Lehrperson *</label>
-                  <select
-                    required
-                    value={teacherId}
-                    onChange={(e) => setTeacherId(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                  >
-                    <option value="">Lehrperson wählen</option>
-                    {teachers?.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.lastName}, {t.firstName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1">Raum</label>
+              {isExceptionMode && (
+                <label className="flex items-center gap-2.5 text-sm text-neutral-800">
                   <input
-                    value={room}
-                    onChange={(e) => setRoom(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    placeholder="optional"
+                    type="checkbox"
+                    checked={exceptionCancel}
+                    onChange={(e) => setExceptionCancel(e.target.checked)}
+                    className="rounded border-neutral-300"
                   />
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={isTest} onChange={(e) => setIsTest(e.target.checked)} />
-                  Prüfung / Test
+                  Ausfall an diesem Datum
                 </label>
-                {!isExceptionMode && canDoubleLesson(structure, editing.period) && (
-                  <label className="flex items-center gap-2 text-sm">
+              )}
+
+              {!exceptionCancel && (
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1.5">Fach *</label>
+                    <select
+                      required
+                      value={subjectId}
+                      onChange={(e) => onSubjectChange(e.target.value)}
+                      className={fieldClass}
+                    >
+                      <option value="">Fach wählen</option>
+                      {subjects?.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1.5">Lehrperson *</label>
+                    <select
+                      required
+                      value={teacherId}
+                      onChange={(e) => setTeacherId(e.target.value)}
+                      className={fieldClass}
+                    >
+                      <option value="">Lehrperson wählen</option>
+                      {teachers?.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.lastName}, {t.firstName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1.5">Raum</label>
+                    <input
+                      value={room}
+                      onChange={(e) => setRoom(e.target.value)}
+                      className={fieldClass}
+                      placeholder="optional"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2.5 text-sm text-neutral-800">
                     <input
                       type="checkbox"
-                      checked={doubleLesson}
-                      onChange={(e) => setDoubleLesson(e.target.checked)}
+                      checked={isTest}
+                      onChange={(e) => setIsTest(e.target.checked)}
+                      className="rounded border-neutral-300"
                     />
-                    Doppellektion (nächste Periode mitbelegen)
+                    Prüfung / Test
                   </label>
-                )}
-              </div>
-            )}
+                  {!isExceptionMode && canDoubleLesson(structure, editing.period) && (
+                    <label className="flex items-center gap-2.5 text-sm text-neutral-800">
+                      <input
+                        type="checkbox"
+                        checked={doubleLesson}
+                        onChange={(e) => setDoubleLesson(e.target.checked)}
+                        className="rounded border-neutral-300"
+                      />
+                      Doppellektion (nächste Periode mitbelegen)
+                    </label>
+                  )}
+                </div>
+              )}
 
-            <div className="flex flex-wrap gap-2 pt-2">
+              {saveErrorMessage && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800" role="alert">
+                  {saveErrorMessage}
+                </div>
+              )}
+              {deleteMutation.isError && (
+                <p className="text-sm text-error">Löschen fehlgeschlagen.</p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2 px-5 py-4 border-t border-neutral-200 bg-neutral-50/60">
               <button
                 type="button"
                 onClick={() => saveMutation.mutate()}
                 disabled={saveMutation.isPending || (!exceptionCancel && (!subjectId || !teacherId))}
-                className="bg-brand-red text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+                className={btnPrimary}
               >
                 Speichern
               </button>
@@ -1058,23 +1132,15 @@ export default function TimetablePage() {
                   type="button"
                   onClick={() => deleteMutation.mutate()}
                   disabled={deleteMutation.isPending}
-                  className="text-red-600 border border-red-200 px-4 py-2 rounded-lg text-sm hover:bg-red-50"
+                  className="inline-flex h-10 items-center px-4 rounded-lg border border-red-200 text-error text-sm font-medium hover:bg-red-50 disabled:opacity-50"
                 >
                   {isExceptionMode ? 'Ausnahme entfernen' : 'Löschen'}
                 </button>
               )}
-              <button type="button" onClick={closeEditor} className="text-neutral-600 px-3 py-2 text-sm">
+              <button type="button" onClick={closeEditor} className={btnGhost}>
                 Abbrechen
               </button>
             </div>
-            {saveErrorMessage && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-                {saveErrorMessage}
-              </div>
-            )}
-            {deleteMutation.isError && (
-              <p className="text-sm text-red-600">Löschen fehlgeschlagen.</p>
-            )}
           </div>
         </div>
       )}
