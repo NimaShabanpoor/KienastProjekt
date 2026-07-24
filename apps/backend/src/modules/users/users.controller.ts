@@ -58,7 +58,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
 export const deactivate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const id = req.params['id'] ?? '';
-    const result = await usersService.deactivateUser(id);
+    const result = await usersService.deactivateUser(id, req.user!.id);
     req.auditEntityId = id;
     res.json({ data: result });
   } catch (err) { next(err); }

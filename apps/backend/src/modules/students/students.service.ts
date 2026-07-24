@@ -120,9 +120,10 @@ export async function updateStudent(id: string, input: Partial<CreateStudentInpu
 
 export async function deactivateStudent(id: string) {
   await getStudentById(id);
+  // Nur inaktiv – kein Soft-Delete
   return prisma.student.update({
     where: { id },
-    data: { isActive: false, deletedAt: new Date() },
+    data: { isActive: false, deletedAt: null },
     select: { id: true, isActive: true },
   });
 }

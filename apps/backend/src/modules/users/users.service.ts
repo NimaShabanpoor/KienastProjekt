@@ -31,12 +31,10 @@ export async function listUsers(params: {
   const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, role, isActive } = params;
   const skip = (page - 1) * limit;
 
-  // Inaktive Benutzer müssen sichtbar bleiben, damit man sie wieder aktivieren kann.
-  // deletedAt wird bei Deaktivierung gesetzt – deshalb nicht pauschal ausfiltern.
+  // Deaktivieren ≠ Löschen: inaktive Benutzer bleiben in der Liste sichtbar
   const where = {
     ...(role !== undefined && { role }),
     ...(isActive !== undefined ? { isActive } : {}),
-    ...(isActive === true ? { deletedAt: null } : {}),
   };
 
   const [users, total] = await Promise.all([
@@ -55,7 +53,7 @@ export async function listUsers(params: {
         lastLoginAt: true,
         createdAt: true,
       },
-      orderBy: { lastName: 'asc' },
+      orderBy: [{ isActive: 'desc' }, { lastName: 'asc' }],
     }),
     prisma.user.count({ where }),
   ]);
@@ -138,11 +136,22 @@ export async function updateUser(id: string, input: UpdateUserInput) {
   });
 }
 
-export async function deactivateUser(id: string) {
-  await getUserById(id);
+export async function deactivateUser(id: string, requestingUserId: string) {
+  if (id === requestingUserId) {
+    throw new ApiError(
+      'Du kannst deinen eigenen Account nicht deaktivieren.',
+      'CANNOT_DEACTIVATE_SELF',
+      400
+    );
+  }
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) throw new ApiError('Benutzer nicht gefunden.', 'USER_NOT_FOUND', 404);
+
+  // Nur inaktiv setzen – kein Soft-Delete / deletedAt
   return prisma.user.update({
     where: { id },
-    data: { isActive: false, deletedAt: new Date() },
+    data: { isActive: false, deletedAt: null },
     select: { id: true, isActive: true },
   });
 }
@@ -150,6 +159,7 @@ export async function deactivateUser(id: string) {
 export async function activateUser(id: string) {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new ApiError('Benutzer nicht gefunden.', 'USER_NOT_FOUND', 404);
+
   return prisma.user.update({
     where: { id },
     data: { isActive: true, deletedAt: null },
