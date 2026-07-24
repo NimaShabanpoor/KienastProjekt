@@ -356,38 +356,11 @@ export async function exportTimetablePdf(
     slotMap.set(`${s.dayOfWeek}-${s.period}`, s);
   }
 
-  /** Kräftige Fachfarben (sichtbare Flächenfüllung, nicht nur Textfarbe) */
-  const SUBJECT_PALETTE: { bg: string; fg: string }[] = [
-    { bg: '#93C5FD', fg: '#1E3A8A' }, // blau
-    { bg: '#86EFAC', fg: '#14532D' }, // grün
-    { bg: '#FCD34D', fg: '#78350F' }, // amber
-    { bg: '#C4B5FD', fg: '#4C1D95' }, // violett
-    { bg: '#FDA4AF', fg: '#881337' }, // rose
-    { bg: '#67E8F9', fg: '#164E63' }, // cyan
-    { bg: '#FDBA74', fg: '#7C2D12' }, // orange
-    { bg: '#BEF264', fg: '#365314' }, // lime
-    { bg: '#F9A8D4', fg: '#831843' }, // pink
-    { bg: '#A5B4FC', fg: '#312E81' }, // indigo
-  ];
-
-  const subjectsUsed = [...new Set(slots.map((s) => s.subject.name))].sort((a, b) =>
-    a.localeCompare(b, 'de')
-  );
-
-  const subjectColorMap = new Map<string, { bg: string; fg: string }>();
-  subjectsUsed.forEach((name, index) => {
-    subjectColorMap.set(name, SUBJECT_PALETTE[index % SUBJECT_PALETTE.length]!);
-  });
-
-  function subjectColor(name: string): { bg: string; fg: string } {
-    return subjectColorMap.get(name) ?? SUBJECT_PALETTE[0]!;
-  }
-
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
       layout: 'landscape',
-      margins: { top: 24, bottom: 24, left: 24, right: 24 },
+      margins: { top: 14, bottom: 14, left: 16, right: 16 },
       autoFirstPage: true,
     });
     const chunks: Buffer[] = [];
@@ -395,21 +368,25 @@ export async function exportTimetablePdf(
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    // Professionelles Schwarz/Weiss/Grau – eine Seite, ohne Farben/Icons
+    const BLACK = '#111111';
+    const DARK = '#333333';
+    const MID = '#666666';
+    const GRID = '#444444';
+    const HEADER_BG = '#333333';
+    const TIME_BG = '#E8E8E8';
+    const LESSON_BG = '#F2F2F2';
+    const EMPTY_BG = '#FFFFFF';
+    const BREAK_BG = '#D0D0D0';
+    const ALT_ROW = '#F5F5F5';
+    const GRID_W = 0.8;
+
     const left = doc.page.margins.left;
     const top = doc.page.margins.top;
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const pageBottom = doc.page.height - doc.page.margins.bottom;
-    const GRID = '#1E293B';
-    const GRID_W = 1.2;
-    const HEADER_BG = '#1F2937';
-    const TIME_BG = '#D1D5DB';
-    const EMPTY_BG = '#FFFFFF';
-    const BREAK_BG = '#94A3B8';
+    const usableH = pageBottom - top;
 
-    /**
-     * Zelle mit Füllung + Rahmen in einem Zug (sichtbares Excel-Gitter).
-     * save/restore hält Farbzustand getrennt vom nachfolgenden Text.
-     */
     const paintCell = (x: number, yy: number, w: number, h: number, fill: string): void => {
       doc.save();
       doc.lineWidth(GRID_W);
@@ -419,43 +396,50 @@ export async function exportTimetablePdf(
       doc.restore();
     };
 
-    // Titelzeile
-    doc.save();
-    doc.rect(left, top, pageWidth, 32).fill(BRAND_RED);
-    doc.restore();
-    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(13);
-    doc.text(`Stundenplan ${classRecord.name}`, left + 10, top + 9, {
-      width: pageWidth * 0.5,
-      lineBreak: false,
-    });
-    doc.font('Helvetica').fontSize(9);
-    doc.text(
-      `${classRecord.schoolYear} · ${classRecord.semester}. Semester · Export ${new Date().toLocaleDateString('de-CH')}`,
-      left + pageWidth * 0.48,
-      top + 11,
-      { width: pageWidth * 0.52 - 10, align: 'right', lineBreak: false }
+    const titleH = 18;
+    const headerRowH = 16;
+    const breakH = 11;
+    const cellPad = 2;
+    const gapBeforeHolidays = 8;
+    const holTitleH = 12;
+    const holHeadH = 13;
+    const holRowH = 11;
+    const holidayRows = Math.max(1, holidays.length);
+    const holidayBlockH = gapBeforeHolidays + holTitleH + holHeadH + holidayRows * holRowH;
+
+    const breakCount = structure.filter((r) => r.type === 'BREAK').length;
+    const periodCount = structure.length - breakCount;
+    const reserved =
+      titleH + 4 + headerRowH + breakCount * breakH + holidayBlockH;
+    const periodRowH = Math.max(
+      26,
+      Math.min(34, Math.floor((usableH - reserved) / Math.max(1, periodCount)))
     );
 
-    let y = top + 42;
-
-    const timeColW = 82;
+    const timeColW = 70;
     const dayColW = (pageWidth - timeColW) / 5;
-    const headerRowH = 28;
-    const cellPad = 4;
-    const cellMinH = 48;
 
-    const ensureSpace = (needed: number): void => {
-      if (y + needed > pageBottom) {
-        doc.addPage();
-        y = top;
-      }
-    };
+    // Titel (grau, nicht farbig)
+    paintCell(left, top, pageWidth, titleH, HEADER_BG);
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10);
+    doc.text(`Stundenplan ${classRecord.name}`, left + 8, top + 5, {
+      width: pageWidth * 0.55,
+      lineBreak: false,
+    });
+    doc.font('Helvetica').fontSize(7);
+    doc.text(
+      `${classRecord.schoolYear} | ${classRecord.semester}. Semester | ${new Date().toLocaleDateString('de-CH')}`,
+      left + pageWidth * 0.5,
+      top + 6,
+      { width: pageWidth * 0.5 - 8, align: 'right', lineBreak: false }
+    );
 
-    // === Kopfzeile ===
-    ensureSpace(headerRowH);
+    let y = top + titleH + 4;
+
+    // Kopfzeile
     paintCell(left, y, timeColW, headerRowH, HEADER_BG);
-    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
-    doc.text('Tag / Zeit', left + cellPad, y + 10, {
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7);
+    doc.text('Zeit', left + cellPad, y + 4.5, {
       width: timeColW - cellPad * 2,
       align: 'center',
       lineBreak: false,
@@ -464,8 +448,8 @@ export async function exportTimetablePdf(
     for (let d = 0; d < 5; d++) {
       const x = left + timeColW + d * dayColW;
       paintCell(x, y, dayColW, headerRowH, HEADER_BG);
-      doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10);
-      doc.text(WEEKDAYS_FULL[d]!, x + 2, y + 9, {
+      doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
+      doc.text(WEEKDAYS_FULL[d]!, x + 2, y + 4, {
         width: dayColW - 4,
         align: 'center',
         lineBreak: false,
@@ -473,82 +457,46 @@ export async function exportTimetablePdf(
     }
     y += headerRowH;
 
-    const measureLines = (
-      subject: string,
-      room: string,
-      teacher: string,
-      width: number
-    ): number => {
-      const w = width - cellPad * 2;
-      doc.font('Helvetica-Bold').fontSize(8);
-      let h = doc.heightOfString(subject, { width: w });
-      doc.font('Helvetica').fontSize(7);
-      if (room) h += 2 + doc.heightOfString(room, { width: w });
-      if (teacher) h += 2 + doc.heightOfString(teacher, { width: w });
-      return Math.max(cellMinH, h + cellPad * 2);
-    };
-
-    // === Perioden / Pausen ===
+    // Perioden / Pausen
     for (const row of structure) {
       if (row.type === 'BREAK') {
-        const h = 22;
-        ensureSpace(h);
-        // Jede Spalte einzeln rahmen → durchgehendes Gitter auch in Pausen
-        paintCell(left, y, timeColW, h, BREAK_BG);
+        paintCell(left, y, timeColW, breakH, BREAK_BG);
         for (let d = 0; d < 5; d++) {
-          paintCell(left + timeColW + d * dayColW, y, dayColW, h, BREAK_BG);
+          paintCell(left + timeColW + d * dayColW, y, dayColW, breakH, BREAK_BG);
         }
         const timePart =
-          row.startTime && row.endTime ? `  ${row.startTime}–${row.endTime}` : '';
-        doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(8);
-        doc.text(`— ${row.label.toUpperCase()}${timePart} —`, left, y + 7, {
+          row.startTime && row.endTime ? ` ${row.startTime}-${row.endTime}` : '';
+        doc.fillColor(BLACK).font('Helvetica-Bold').fontSize(6.5);
+        doc.text(`${row.label.toUpperCase()}${timePart}`, left, y + 2.5, {
           width: pageWidth,
           align: 'center',
           lineBreak: false,
         });
-        y += h;
+        y += breakH;
         continue;
       }
 
       const period = row.period!;
       const timeLabel =
-        row.startTime && row.endTime
-          ? `${row.startTime} – ${row.endTime}`
-          : '';
+        row.startTime && row.endTime ? `${row.startTime}-${row.endTime}` : '';
+      const rowH = periodRowH;
 
-      let rowH = cellMinH;
-      for (let d = 1; d <= 5; d++) {
-        const slot = slotMap.get(`${d}-${period}`);
-        if (!slot) continue;
-        rowH = Math.max(
-          rowH,
-          measureLines(
-            slot.subject.name,
-            slot.room ? `Zimmer ${slot.room}` : '',
-            `${slot.teacher.firstName} ${slot.teacher.lastName}`,
-            dayColW
-          )
-        );
-      }
-
-      ensureSpace(rowH);
-
-      // Zeitspalte
       paintCell(left, y, timeColW, rowH, TIME_BG);
-      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8);
-      doc.text(row.label, left + cellPad, y + 8, {
+      doc.fillColor(BLACK).font('Helvetica-Bold').fontSize(7);
+      doc.text(row.label, left + cellPad, y + 4, {
         width: timeColW - cellPad * 2,
         align: 'center',
+        lineBreak: false,
       });
       if (timeLabel) {
-        doc.fillColor('#374151').font('Helvetica').fontSize(7);
-        doc.text(timeLabel, left + cellPad, y + 22, {
+        doc.fillColor(MID).font('Helvetica').fontSize(6);
+        doc.text(timeLabel, left + cellPad, y + 14, {
           width: timeColW - cellPad * 2,
           align: 'center',
+          lineBreak: false,
         });
       }
 
-      // Tageszellen – jede Zelle gefüllt + gerahmt
       for (let d = 1; d <= 5; d++) {
         const x = left + timeColW + (d - 1) * dayColW;
         const slot = slotMap.get(`${d}-${period}`);
@@ -558,69 +506,71 @@ export async function exportTimetablePdf(
           continue;
         }
 
-        const colors = subjectColor(slot.subject.name);
-        paintCell(x, y, dayColW, rowH, colors.bg);
+        paintCell(x, y, dayColW, rowH, LESSON_BG);
 
         const textW = dayColW - cellPad * 2;
-        let ty = y + cellPad + 2;
+        let ty = y + cellPad + 1;
+        const teacher = `${slot.teacher.firstName} ${slot.teacher.lastName}`;
 
-        doc.fillColor(colors.fg).font('Helvetica-Bold').fontSize(8);
-        doc.text(slot.subject.name, x + cellPad, ty, { width: textW });
-        ty += doc.heightOfString(slot.subject.name, { width: textW }) + 2;
+        doc.fillColor(BLACK).font('Helvetica-Bold').fontSize(7);
+        doc.text(slot.subject.name, x + cellPad, ty, {
+          width: textW,
+          lineBreak: false,
+          ellipsis: true,
+        });
+        ty += 9;
 
         if (slot.room) {
-          const roomText = `Zimmer ${slot.room}`;
-          doc.fillColor(colors.fg).font('Helvetica').fontSize(7);
-          doc.text(roomText, x + cellPad, ty, { width: textW });
-          ty += doc.heightOfString(roomText, { width: textW }) + 2;
+          doc.fillColor(DARK).font('Helvetica').fontSize(6);
+          doc.text(`Zimmer ${slot.room}`, x + cellPad, ty, {
+            width: textW,
+            lineBreak: false,
+            ellipsis: true,
+          });
+          ty += 8;
         }
 
-        const teacher = `${slot.teacher.firstName} ${slot.teacher.lastName}`;
-        doc.fillColor(colors.fg).font('Helvetica').fontSize(7);
-        doc.text(teacher, x + cellPad, ty, { width: textW });
+        doc.fillColor(MID).font('Helvetica').fontSize(6);
+        doc.text(teacher, x + cellPad, ty, {
+          width: textW,
+          lineBreak: false,
+          ellipsis: true,
+        });
       }
 
       y += rowH;
     }
 
-    // === Feiertage als gerahmte Tabelle ===
-    y += 16;
-    ensureSpace(50);
-
-    doc.fillColor(BRAND_RED).font('Helvetica-Bold').fontSize(11);
+    // Feiertage (kompakt, gleiche Seite)
+    y += gapBeforeHolidays;
+    doc.fillColor(BLACK).font('Helvetica-Bold').fontSize(8);
     doc.text('Unterrichtsfreie Zeit / Feiertage', left, y, { lineBreak: false });
-    y += 16;
+    y += holTitleH;
 
-    const holColDate = pageWidth * 0.42;
+    const holColDate = pageWidth * 0.35;
     const holColName = pageWidth - holColDate;
-    const holHeadH = 20;
-    const holRowH = 18;
 
-    ensureSpace(holHeadH + 20);
     paintCell(left, y, holColDate, holHeadH, HEADER_BG);
     paintCell(left + holColDate, y, holColName, holHeadH, HEADER_BG);
-    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
-    doc.text('Datum', left + 6, y + 6, { width: holColDate - 12, lineBreak: false });
-    doc.text('Bezeichnung', left + holColDate + 6, y + 6, {
-      width: holColName - 12,
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7);
+    doc.text('Datum', left + 5, y + 3, { width: holColDate - 10, lineBreak: false });
+    doc.text('Bezeichnung', left + holColDate + 5, y + 3, {
+      width: holColName - 10,
       lineBreak: false,
     });
     y += holHeadH;
 
     if (holidays.length === 0) {
-      ensureSpace(holRowH);
-      paintCell(left, y, holColDate, holRowH, '#F9FAFB');
-      paintCell(left + holColDate, y, holColName, holRowH, '#F9FAFB');
-      doc.fillColor('#6B7280').font('Helvetica').fontSize(8);
-      doc.text('Keine Feiertage erfasst.', left + 6, y + 5, {
-        width: pageWidth - 12,
+      paintCell(left, y, holColDate, holRowH, EMPTY_BG);
+      paintCell(left + holColDate, y, holColName, holRowH, EMPTY_BG);
+      doc.fillColor(MID).font('Helvetica').fontSize(6.5);
+      doc.text('Keine Feiertage erfasst.', left + 5, y + 2.5, {
+        width: pageWidth - 10,
         lineBreak: false,
       });
-      y += holRowH;
     } else {
       holidays.forEach((h, idx) => {
-        ensureSpace(holRowH);
-        const bg = idx % 2 === 0 ? '#FFFFFF' : '#E5E7EB';
+        const bg = idx % 2 === 0 ? EMPTY_BG : ALT_ROW;
         paintCell(left, y, holColDate, holRowH, bg);
         paintCell(left + holColDate, y, holColName, holRowH, bg);
 
@@ -630,50 +580,18 @@ export async function exportTimetablePdf(
           month: '2-digit',
           year: 'numeric',
         });
-        doc.fillColor('#111827').font('Helvetica').fontSize(8);
-        doc.text(dateStr, left + 6, y + 5, { width: holColDate - 12, lineBreak: false });
-        doc.font('Helvetica-Bold').text(h.name, left + holColDate + 6, y + 5, {
-          width: holColName - 12,
+        doc.fillColor(BLACK).font('Helvetica').fontSize(6.5);
+        doc.text(dateStr, left + 5, y + 2.5, {
+          width: holColDate - 10,
           lineBreak: false,
+        });
+        doc.font('Helvetica-Bold').text(h.name, left + holColDate + 5, y + 2.5, {
+          width: holColName - 10,
+          lineBreak: false,
+          ellipsis: true,
         });
         y += holRowH;
       });
-    }
-
-    // === Legende mit Farbfeldern ===
-    if (subjectsUsed.length > 0) {
-      y += 16;
-      ensureSpace(40);
-      doc.fillColor(BRAND_RED).font('Helvetica-Bold').fontSize(11);
-      doc.text('Legende (Fächer)', left, y, { lineBreak: false });
-      y += 14;
-
-      const swatch = 14;
-      const gap = 8;
-      const colW = (pageWidth - gap) / 2;
-      let col = 0;
-      let rowY = y;
-
-      for (const name of subjectsUsed) {
-        ensureSpace(swatch + 8);
-        if (col === 0) rowY = y;
-        const x = left + col * (colW + gap);
-        const colors = subjectColor(name);
-
-        paintCell(x, rowY, swatch, swatch, colors.bg);
-        doc.fillColor('#111827').font('Helvetica').fontSize(8);
-        doc.text(name, x + swatch + 6, rowY + 2, {
-          width: colW - swatch - 10,
-          lineBreak: false,
-        });
-
-        col += 1;
-        if (col >= 2) {
-          col = 0;
-          y = rowY + swatch + 6;
-        }
-      }
-      if (col !== 0) y = rowY + swatch + 6;
     }
 
     doc.end();
