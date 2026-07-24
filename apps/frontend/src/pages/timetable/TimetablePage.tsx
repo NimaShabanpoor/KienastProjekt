@@ -852,7 +852,11 @@ export default function TimetablePage() {
               </button>
             </div>
             {(saveMutation.isError || deleteMutation.isError) && (
-              <p className="text-sm text-red-600">Aktion fehlgeschlagen. Angaben prüfen.</p>
+              <p className="text-sm text-red-600">
+                {(saveMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error
+                  ?? (deleteMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error
+                  ?? 'Aktion fehlgeschlagen. Angaben prüfen.'}
+              </p>
             )}
           </div>
         </div>

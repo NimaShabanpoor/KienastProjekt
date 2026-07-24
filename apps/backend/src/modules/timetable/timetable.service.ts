@@ -187,6 +187,164 @@ async function getPeriodMap(): Promise<Map<number, PeriodDto>> {
   return map;
 }
 
+function timesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function periodTimesOverlap(
+  periodMap: Map<number, PeriodDto>,
+  periodA: number,
+  periodB: number
+): boolean {
+  const a = periodMap.get(periodA);
+  const b = periodMap.get(periodB);
+  if (!a || !b) return periodA === periodB;
+  return timesOverlap(a.startTime, a.endTime, b.startTime, b.endTime);
+}
+
+/**
+ * Prüft, ob die Lehrperson am Wochentag schon in einer anderen Klasse
+ * (oder anderer Periode) zur gleichen Zeit eingetragen ist.
+ */
+async function assertTeacherWeeklyFree(params: {
+  teacherId: string;
+  dayOfWeek: number;
+  periods: number[];
+  /** Diese Zellen werden überschrieben und zählen nicht als Konflikt */
+  excludeClassId: string;
+}): Promise<void> {
+  const periodMap = await getPeriodMap();
+  const otherSlots = await prisma.timetableSlot.findMany({
+    where: {
+      teacherId: params.teacherId,
+      dayOfWeek: params.dayOfWeek,
+      NOT: {
+        AND: [
+          { classId: params.excludeClassId },
+          { period: { in: params.periods } },
+        ],
+      },
+    },
+    include: {
+      subject: { select: { name: true } },
+      class: { select: { name: true } },
+    },
+  });
+
+  for (const slot of otherSlots) {
+    for (const period of params.periods) {
+      if (!periodTimesOverlap(periodMap, period, slot.period)) continue;
+      const when = periodMap.get(slot.period);
+      const timeLabel = when ? `${when.startTime}–${when.endTime}` : `Periode ${slot.period}`;
+      throw new ApiError(
+        `Lehrperson ist bereits belegt: ${slot.class.name}, ${slot.subject.name} (${timeLabel}).`,
+        'TEACHER_CONFLICT',
+        409,
+        {
+          conflictingClassId: slot.classId,
+          conflictingPeriod: slot.period,
+          conflictingSubject: slot.subject.name,
+        }
+      );
+    }
+  }
+}
+
+/**
+ * Effektive Lehrperson-Belegung an einem Datum (Vorlage + Ausnahmen).
+ * Verhindert Überschneidungen bei OVERRIDE-Ausnahmen.
+ */
+async function assertTeacherFreeOnDate(params: {
+  teacherId: string;
+  date: string;
+  dayOfWeek: number;
+  period: number;
+  excludeClassId: string;
+}): Promise<void> {
+  const periodMap = await getPeriodMap();
+  const dateObj = new Date(params.date);
+
+  const [slots, exceptions] = await Promise.all([
+    prisma.timetableSlot.findMany({
+      where: { dayOfWeek: params.dayOfWeek },
+      include: {
+        subject: { select: { name: true } },
+        class: { select: { name: true } },
+      },
+    }),
+    prisma.timetableException.findMany({
+      where: { date: dateObj },
+      include: {
+        subject: { select: { name: true } },
+        class: { select: { name: true } },
+      },
+    }),
+  ]);
+
+  type Busy = {
+    classId: string;
+    period: number;
+    className: string;
+    subjectName: string;
+  };
+
+  const busy = new Map<string, Busy>();
+  const teacherByKey = new Map<string, string>();
+
+  for (const slot of slots) {
+    const key = `${slot.classId}:${slot.period}`;
+    busy.set(key, {
+      classId: slot.classId,
+      period: slot.period,
+      className: slot.class.name,
+      subjectName: slot.subject.name,
+    });
+    teacherByKey.set(key, slot.teacherId);
+  }
+
+  for (const ex of exceptions) {
+    const key = `${ex.classId}:${ex.period}`;
+    if (ex.type === TimetableExceptionType.CANCEL) {
+      busy.delete(key);
+      teacherByKey.delete(key);
+      continue;
+    }
+    if (ex.type === TimetableExceptionType.OVERRIDE && ex.teacherId) {
+      teacherByKey.set(key, ex.teacherId);
+      busy.set(key, {
+        classId: ex.classId,
+        period: ex.period,
+        className: ex.class.name,
+        subjectName: ex.subject?.name ?? 'Stellvertretung',
+      });
+    }
+  }
+
+  // Zelle, die wir gerade setzen, ausnehmen
+  const excludeKey = `${params.excludeClassId}:${params.period}`;
+  busy.delete(excludeKey);
+  teacherByKey.delete(excludeKey);
+
+  for (const [key, teacherId] of teacherByKey) {
+    if (teacherId !== params.teacherId) continue;
+    const entry = busy.get(key);
+    if (!entry) continue;
+    if (!periodTimesOverlap(periodMap, params.period, entry.period)) continue;
+    const when = periodMap.get(entry.period);
+    const timeLabel = when ? `${when.startTime}–${when.endTime}` : `Periode ${entry.period}`;
+    throw new ApiError(
+      `Lehrperson ist an diesem Datum bereits belegt: ${entry.className}, ${entry.subjectName} (${timeLabel}).`,
+      'TEACHER_CONFLICT',
+      409,
+      {
+        conflictingClassId: entry.classId,
+        conflictingPeriod: entry.period,
+        conflictingSubject: entry.subjectName,
+      }
+    );
+  }
+}
+
 export async function getClassTimetable(classId: string) {
   const cls = await prisma.class.findUnique({ where: { id: classId } });
   if (!cls) throw new ApiError('Klasse nicht gefunden.', 'CLASS_NOT_FOUND', 404);
@@ -236,6 +394,13 @@ export async function upsertSlot(input: {
     }
     periodsToWrite.push(input.period + 1);
   }
+
+  await assertTeacherWeeklyFree({
+    teacherId: input.teacherId,
+    dayOfWeek: input.dayOfWeek,
+    periods: periodsToWrite,
+    excludeClassId: input.classId,
+  });
 
   const results = [];
   for (const period of periodsToWrite) {
@@ -323,6 +488,13 @@ export async function upsertException(input: {
     }
     await assertSubjectBelongsToClass(input.subjectId, input.classId);
     await assertTeacher(input.teacherId);
+    await assertTeacherFreeOnDate({
+      teacherId: input.teacherId,
+      date: input.date,
+      dayOfWeek: day,
+      period: input.period,
+      excludeClassId: input.classId,
+    });
   }
 
   return prisma.timetableException.upsert({
