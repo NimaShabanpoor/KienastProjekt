@@ -203,8 +203,8 @@ function periodTimesOverlap(
 }
 
 /**
- * Prüft, ob die Lehrperson am Wochentag schon in einer anderen Klasse
- * (oder anderer Periode) zur gleichen Zeit eingetragen ist.
+ * Prüft, ob die Lehrperson am Wochentag schon zur gleichen Zeit
+ * (gleiche oder zeitlich überlappende Periode) eingetragen ist.
  */
 async function assertTeacherWeeklyFree(params: {
   teacherId: string;
@@ -214,16 +214,10 @@ async function assertTeacherWeeklyFree(params: {
   excludeClassId: string;
 }): Promise<void> {
   const periodMap = await getPeriodMap();
-  const otherSlots = await prisma.timetableSlot.findMany({
+  const existing = await prisma.timetableSlot.findMany({
     where: {
       teacherId: params.teacherId,
       dayOfWeek: params.dayOfWeek,
-      NOT: {
-        AND: [
-          { classId: params.excludeClassId },
-          { period: { in: params.periods } },
-        ],
-      },
     },
     include: {
       subject: { select: { name: true } },
@@ -231,13 +225,21 @@ async function assertTeacherWeeklyFree(params: {
     },
   });
 
-  for (const slot of otherSlots) {
+  for (const slot of existing) {
+    // Upsert der gleichen Zelle (Klasse + Periode) ist ok
+    if (slot.classId === params.excludeClassId && params.periods.includes(slot.period)) {
+      continue;
+    }
+
     for (const period of params.periods) {
-      if (!periodTimesOverlap(periodMap, period, slot.period)) continue;
+      const samePeriod = slot.period === period;
+      const overlap = samePeriod || periodTimesOverlap(periodMap, period, slot.period);
+      if (!overlap) continue;
+
       const when = periodMap.get(slot.period);
-      const timeLabel = when ? `${when.startTime}–${when.endTime}` : `Periode ${slot.period}`;
+      const timeLabel = when ? `${when.startTime}–${when.endTime}` : `${slot.period}. Lektion`;
       throw new ApiError(
-        `Lehrperson ist bereits belegt: ${slot.class.name}, ${slot.subject.name} (${timeLabel}).`,
+        `Überschneidung: Die Lehrperson unterrichtet bereits «${slot.subject.name}» in Klasse ${slot.class.name} (${timeLabel}). Eine Person kann nicht gleichzeitig zwei Lektionen halten.`,
         'TEACHER_CONFLICT',
         409,
         {
@@ -333,7 +335,7 @@ async function assertTeacherFreeOnDate(params: {
     const when = periodMap.get(entry.period);
     const timeLabel = when ? `${when.startTime}–${when.endTime}` : `Periode ${entry.period}`;
     throw new ApiError(
-      `Lehrperson ist an diesem Datum bereits belegt: ${entry.className}, ${entry.subjectName} (${timeLabel}).`,
+      `Überschneidung: Die Lehrperson unterrichtet an diesem Datum bereits «${entry.subjectName}» in Klasse ${entry.className} (${timeLabel}).`,
       'TEACHER_CONFLICT',
       409,
       {

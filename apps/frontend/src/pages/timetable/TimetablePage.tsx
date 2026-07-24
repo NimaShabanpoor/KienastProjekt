@@ -2,6 +2,7 @@
 
 import { useMemo, useState, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { apiClient } from '../../api/client';
 import type { Class, Subject, User } from '@schuladmin/shared';
 import { WEEKDAY_LABELS } from '@schuladmin/shared';
@@ -245,6 +246,13 @@ export default function TimetablePage() {
       closeEditor();
     },
   });
+
+  const saveErrorMessage = (() => {
+    const err = saveMutation.error;
+    if (!err || !axios.isAxiosError(err)) return null;
+    const data = err.response?.data as { error?: string } | undefined;
+    return data?.error ?? 'Speichern fehlgeschlagen. Angaben prüfen.';
+  })();
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -851,12 +859,13 @@ export default function TimetablePage() {
                 Abbrechen
               </button>
             </div>
-            {(saveMutation.isError || deleteMutation.isError) && (
-              <p className="text-sm text-red-600">
-                {(saveMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error
-                  ?? (deleteMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error
-                  ?? 'Aktion fehlgeschlagen. Angaben prüfen.'}
-              </p>
+            {saveErrorMessage && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+                {saveErrorMessage}
+              </div>
+            )}
+            {deleteMutation.isError && (
+              <p className="text-sm text-red-600">Löschen fehlgeschlagen.</p>
             )}
           </div>
         </div>
