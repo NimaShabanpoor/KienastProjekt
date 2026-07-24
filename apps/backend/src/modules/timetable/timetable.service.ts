@@ -1,26 +1,209 @@
-// Stundenplan-Service: Wochenvorlage + Ausnahmen + Materialisierung zu Lessons
+// Stundenplan-Service: Tagesstruktur + Wochenvorlage + Ausnahmen + Materialisierung
 
-import { Role, TimetableExceptionType } from '@prisma/client';
+import { Role, TimetableExceptionType, TimetableRowType } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
-import { TIMETABLE_PERIODS, getPeriod, toSchoolDayOfWeek } from '../../config/timetable';
+import { DEFAULT_TIMETABLE_STRUCTURE, toSchoolDayOfWeek } from '../../config/timetable';
 
 const slotInclude = {
   subject: { select: { id: true, name: true, classId: true } },
   teacher: { select: { id: true, firstName: true, lastName: true } },
 } as const;
 
+const TIME_RE = /^\d{2}:\d{2}$/;
+
+export type StructureRowDto = {
+  id: string;
+  sortOrder: number;
+  type: 'LESSON' | 'BREAK';
+  label: string;
+  startTime: string | null;
+  endTime: string | null;
+  period: number | null;
+};
+
+export type PeriodDto = {
+  period: number;
+  startTime: string;
+  endTime: string;
+  label: string;
+};
+
+function toDto(row: {
+  id: string;
+  sortOrder: number;
+  type: TimetableRowType;
+  label: string;
+  startTime: string | null;
+  endTime: string | null;
+  period: number | null;
+}): StructureRowDto {
+  return {
+    id: row.id,
+    sortOrder: row.sortOrder,
+    type: row.type,
+    label: row.label,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    period: row.period,
+  };
+}
+
+function periodsFromStructure(structure: StructureRowDto[]): PeriodDto[] {
+  return structure
+    .filter((r) => r.type === 'LESSON' && r.period != null && r.startTime && r.endTime)
+    .map((r) => ({
+      period: r.period!,
+      startTime: r.startTime!,
+      endTime: r.endTime!,
+      label: r.label,
+    }));
+}
+
+/** Lädt Struktur; legt Standard an, falls leer. */
+export async function ensureStructure(): Promise<StructureRowDto[]> {
+  const existing = await prisma.timetableStructureRow.findMany({
+    orderBy: { sortOrder: 'asc' },
+  });
+  if (existing.length > 0) {
+    return existing.map(toDto);
+  }
+  return seedDefaultStructure();
+}
+
+async function seedDefaultStructure(): Promise<StructureRowDto[]> {
+  let lessonPeriod = 0;
+  const created = [];
+  for (let i = 0; i < DEFAULT_TIMETABLE_STRUCTURE.length; i++) {
+    const row = DEFAULT_TIMETABLE_STRUCTURE[i]!;
+    const period = row.type === 'LESSON' ? ++lessonPeriod : null;
+    created.push(
+      await prisma.timetableStructureRow.create({
+        data: {
+          sortOrder: i + 1,
+          type: row.type as TimetableRowType,
+          label: row.label,
+          startTime: row.startTime ?? null,
+          endTime: row.endTime ?? null,
+          period,
+        },
+      })
+    );
+  }
+  return created.map(toDto);
+}
+
+export async function getStructure() {
+  const structure = await ensureStructure();
+  return { structure, periods: periodsFromStructure(structure) };
+}
+
+export async function saveStructure(
+  rows: Array<{
+    type: 'LESSON' | 'BREAK';
+    label: string;
+    startTime?: string | null;
+    endTime?: string | null;
+  }>
+) {
+  if (rows.length === 0) {
+    throw new ApiError('Mindestens eine Zeile erforderlich.', 'STRUCTURE_EMPTY', 400);
+  }
+
+  let lessonCount = 0;
+  for (const row of rows) {
+    const label = row.label.trim();
+    if (!label) {
+      throw new ApiError('Jede Zeile braucht eine Bezeichnung.', 'STRUCTURE_LABEL', 400);
+    }
+    if (row.type === 'LESSON') {
+      lessonCount += 1;
+      if (!row.startTime || !row.endTime || !TIME_RE.test(row.startTime) || !TIME_RE.test(row.endTime)) {
+        throw new ApiError(
+          `Lektion «${label}» braucht Start- und Endzeit (HH:MM).`,
+          'STRUCTURE_TIME',
+          400
+        );
+      }
+      if (row.startTime >= row.endTime) {
+        throw new ApiError(
+          `Bei «${label}» muss die Endzeit nach der Startzeit liegen.`,
+          'STRUCTURE_TIME_ORDER',
+          400
+        );
+      }
+    }
+  }
+
+  if (lessonCount === 0) {
+    throw new ApiError('Mindestens eine Lektion ist erforderlich.', 'STRUCTURE_NO_LESSON', 400);
+  }
+
+  const validPeriods = new Set<number>();
+  await prisma.$transaction(async (tx) => {
+    await tx.timetableStructureRow.deleteMany();
+    let lessonPeriod = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      const period = row.type === 'LESSON' ? ++lessonPeriod : null;
+      if (period != null) validPeriods.add(period);
+      await tx.timetableStructureRow.create({
+        data: {
+          sortOrder: i + 1,
+          type: row.type as TimetableRowType,
+          label: row.label.trim(),
+          startTime: row.type === 'LESSON' ? row.startTime! : (row.startTime?.trim() || null),
+          endTime: row.type === 'LESSON' ? row.endTime! : (row.endTime?.trim() || null),
+          period,
+        },
+      });
+    }
+
+    // Verwaiste Vorlagen/Ausnahmen zu entfernten Perioden löschen
+    await tx.timetableSlot.deleteMany({
+      where: { period: { notIn: [...validPeriods] } },
+    });
+    await tx.timetableException.deleteMany({
+      where: { period: { notIn: [...validPeriods] } },
+    });
+  });
+
+  return getStructure();
+}
+
+function canDoubleFromPeriod(structure: StructureRowDto[], period: number): boolean {
+  const idx = structure.findIndex((r) => r.type === 'LESSON' && r.period === period);
+  if (idx < 0 || idx >= structure.length - 1) return false;
+  const next = structure[idx + 1];
+  return Boolean(next && next.type === 'LESSON' && next.period === period + 1);
+}
+
+async function getPeriodMap(): Promise<Map<number, PeriodDto>> {
+  const structure = await ensureStructure();
+  const map = new Map<number, PeriodDto>();
+  for (const p of periodsFromStructure(structure)) {
+    map.set(p.period, p);
+  }
+  return map;
+}
+
 export async function getClassTimetable(classId: string) {
   const cls = await prisma.class.findUnique({ where: { id: classId } });
   if (!cls) throw new ApiError('Klasse nicht gefunden.', 'CLASS_NOT_FOUND', 404);
 
+  const structure = await ensureStructure();
   const slots = await prisma.timetableSlot.findMany({
     where: { classId },
     include: slotInclude,
     orderBy: [{ dayOfWeek: 'asc' }, { period: 'asc' }],
   });
 
-  return { class: cls, periods: TIMETABLE_PERIODS, slots };
+  return {
+    class: cls,
+    structure,
+    periods: periodsFromStructure(structure),
+    slots,
+  };
 }
 
 export async function upsertSlot(input: {
@@ -36,17 +219,17 @@ export async function upsertSlot(input: {
   await assertSubjectBelongsToClass(input.subjectId, input.classId);
   await assertTeacher(input.teacherId);
 
+  const structure = await ensureStructure();
+  const periodMeta = periodsFromStructure(structure).find((p) => p.period === input.period);
+  if (!periodMeta) {
+    throw new ApiError('Ungültige Periode.', 'INVALID_PERIOD', 400);
+  }
+
   const periodsToWrite = [input.period];
   if (input.doubleLesson) {
-    if (input.period >= 8) {
-      throw new ApiError('Doppellektion ab Periode 8 nicht möglich.', 'DOUBLE_LESSON_INVALID', 400);
-    }
-    // Keine Doppellektion über die Mittagspause (4→5) oder Pausen hinweg erzwingen:
-    // erlaubt 1-2, 3-4, 5-6, 7-8
-    const pairs = new Set([1, 3, 5, 7]);
-    if (!pairs.has(input.period)) {
+    if (!canDoubleFromPeriod(structure, input.period)) {
       throw new ApiError(
-        'Doppellektion nur ab Periode 1, 3, 5 oder 7 möglich.',
+        'Doppellektion nur möglich, wenn die nächste Zeile eine Lektion ohne Pause dazwischen ist.',
         'DOUBLE_LESSON_INVALID',
         400
       );
@@ -129,6 +312,11 @@ export async function upsertException(input: {
     throw new ApiError('Ausnahmen nur für Mo–Fr möglich.', 'WEEKEND_NOT_ALLOWED', 400);
   }
 
+  const periodMap = await getPeriodMap();
+  if (!periodMap.has(input.period)) {
+    throw new ApiError('Ungültige Periode.', 'INVALID_PERIOD', 400);
+  }
+
   if (input.type === 'OVERRIDE') {
     if (!input.subjectId || !input.teacherId) {
       throw new ApiError('OVERRIDE benötigt Fach und Lehrperson.', 'MISSING_FIELDS', 400);
@@ -178,22 +366,20 @@ export async function deleteException(id: string) {
 
 /**
  * Materialisiert aus Vorlage + Ausnahmen konkrete Lesson-Zeilen für Absenzen.
- * Wird von listLessons genutzt.
  */
 export async function materializeLessonsForRange(params: {
   classId?: string;
   dateFrom: string;
   dateTo: string;
 }): Promise<void> {
-  const classFilter = params.classId
-    ? { id: params.classId }
-    : { isActive: true };
+  const classFilter = params.classId ? { id: params.classId } : { isActive: true };
 
   const classes = await prisma.class.findMany({
     where: classFilter,
     select: { id: true },
   });
 
+  const periodMap = await getPeriodMap();
   const from = new Date(params.dateFrom + 'T12:00:00');
   const to = new Date(params.dateTo + 'T12:00:00');
 
@@ -215,7 +401,7 @@ export async function materializeLessonsForRange(params: {
 
       const daySlots = slots.filter((s) => s.dayOfWeek === dayOfWeek);
       for (const slot of daySlots) {
-        const periodMeta = getPeriod(slot.period);
+        const periodMeta = periodMap.get(slot.period);
         if (!periodMeta) continue;
 
         const ex = exceptions.find(
@@ -229,9 +415,10 @@ export async function materializeLessonsForRange(params: {
           continue;
         }
 
-        const subjectId = ex?.type === TimetableExceptionType.OVERRIDE && ex.subjectId
-          ? ex.subjectId
-          : slot.subjectId;
+        const subjectId =
+          ex?.type === TimetableExceptionType.OVERRIDE && ex.subjectId
+            ? ex.subjectId
+            : slot.subjectId;
         const room =
           ex?.type === TimetableExceptionType.OVERRIDE ? (ex.room ?? null) : slot.room;
         const isTest =
@@ -249,7 +436,6 @@ export async function materializeLessonsForRange(params: {
         });
       }
 
-      // OVERRIDE ohne Slot (zusätzliche Lektion an einem Tag)
       const dayExceptions = exceptions.filter(
         (e) => e.date.toISOString().slice(0, 10) === dateStr
       );
@@ -257,7 +443,7 @@ export async function materializeLessonsForRange(params: {
         if (ex.type !== TimetableExceptionType.OVERRIDE || !ex.subjectId) continue;
         const hasSlot = daySlots.some((s) => s.period === ex.period);
         if (hasSlot) continue;
-        const periodMeta = getPeriod(ex.period);
+        const periodMeta = periodMap.get(ex.period);
         if (!periodMeta) continue;
         await upsertMaterializedLesson({
           subjectId: ex.subjectId,

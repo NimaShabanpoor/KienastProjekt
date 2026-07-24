@@ -7,10 +7,22 @@ import { validateMiddleware } from '../../middleware/validate.middleware';
 import { auditLogMiddleware } from '../../middleware/auditLog.middleware';
 import { AuditEntityType } from '@prisma/client';
 import * as timetableController from './timetable.controller';
-import { UpsertTimetableSlotBodySchema, UpsertTimetableExceptionBodySchema } from './timetable.schemas';
+import {
+  UpsertTimetableSlotBodySchema,
+  UpsertTimetableExceptionBodySchema,
+  SaveTimetableStructureBodySchema,
+} from './timetable.schemas';
 
 const router = Router();
 router.use(authMiddleware, adminOnly);
+
+router.get('/structure', timetableController.getStructure);
+router.put(
+  '/structure',
+  validateMiddleware({ body: SaveTimetableStructureBodySchema }),
+  auditLogMiddleware('TIMETABLE_IMPORT', AuditEntityType.TIMETABLE_IMPORT),
+  timetableController.saveStructure
+);
 
 router.get('/', timetableController.getTimetable);
 router.put(

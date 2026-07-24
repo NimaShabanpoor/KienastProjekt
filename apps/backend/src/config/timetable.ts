@@ -1,21 +1,24 @@
-// Feste Perioden für den Wochenstundenplan
+// Standard-Tagesstruktur (als Seed, wenn noch nichts konfiguriert)
 
-export interface TimetablePeriod {
-  period: number;
-  startTime: string;
-  endTime: string;
+export interface StructureRowInput {
+  type: 'LESSON' | 'BREAK';
   label: string;
+  startTime?: string | null;
+  endTime?: string | null;
 }
 
-export const TIMETABLE_PERIODS: TimetablePeriod[] = [
-  { period: 1, startTime: '08:00', endTime: '08:45', label: '1. Lektion' },
-  { period: 2, startTime: '08:45', endTime: '09:30', label: '2. Lektion' },
-  { period: 3, startTime: '09:50', endTime: '10:35', label: '3. Lektion' },
-  { period: 4, startTime: '10:35', endTime: '11:20', label: '4. Lektion' },
-  { period: 5, startTime: '13:00', endTime: '13:45', label: '5. Lektion' },
-  { period: 6, startTime: '13:45', endTime: '14:30', label: '6. Lektion' },
-  { period: 7, startTime: '14:50', endTime: '15:35', label: '7. Lektion' },
-  { period: 8, startTime: '15:35', endTime: '16:20', label: '8. Lektion' },
+export const DEFAULT_TIMETABLE_STRUCTURE: StructureRowInput[] = [
+  { type: 'LESSON', label: '1. Lektion', startTime: '08:00', endTime: '08:45' },
+  { type: 'LESSON', label: '2. Lektion', startTime: '08:45', endTime: '09:30' },
+  { type: 'BREAK', label: 'Pause' },
+  { type: 'LESSON', label: '3. Lektion', startTime: '09:50', endTime: '10:35' },
+  { type: 'LESSON', label: '4. Lektion', startTime: '10:35', endTime: '11:20' },
+  { type: 'BREAK', label: 'Mittagspause' },
+  { type: 'LESSON', label: '5. Lektion', startTime: '13:00', endTime: '13:45' },
+  { type: 'LESSON', label: '6. Lektion', startTime: '13:45', endTime: '14:30' },
+  { type: 'BREAK', label: 'Pause' },
+  { type: 'LESSON', label: '7. Lektion', startTime: '14:50', endTime: '15:35' },
+  { type: 'LESSON', label: '8. Lektion', startTime: '15:35', endTime: '16:20' },
 ];
 
 export const WEEKDAY_LABELS: Record<number, string> = {
@@ -25,10 +28,6 @@ export const WEEKDAY_LABELS: Record<number, string> = {
   4: 'Do',
   5: 'Fr',
 };
-
-export function getPeriod(period: number): TimetablePeriod | undefined {
-  return TIMETABLE_PERIODS.find((p) => p.period === period);
-}
 
 export function toSchoolDayOfWeek(date: Date): number | null {
   const js = date.getDay();

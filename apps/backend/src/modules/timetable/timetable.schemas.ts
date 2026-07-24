@@ -1,23 +1,29 @@
-// Zod-Schemas für Stundenplan-Vorlage und Ausnahmen
+// Zod-Schemas für Stundenplan-Vorlage, Struktur und Ausnahmen
 
 import { z } from 'zod';
+
+const timeOptional = z
+  .string()
+  .regex(/^\d{2}:\d{2}$/, 'Zeitformat HH:MM')
+  .optional()
+  .nullable();
 
 export const UpsertTimetableSlotBodySchema = z.object({
   classId: z.string().cuid(),
   dayOfWeek: z.coerce.number().int().min(1).max(5),
-  period: z.coerce.number().int().min(1).max(8),
+  period: z.coerce.number().int().min(1).max(20),
   subjectId: z.string().cuid(),
   teacherId: z.string().cuid(),
   room: z.string().max(50).optional().nullable(),
   isTest: z.coerce.boolean().optional().default(false),
-  /** Belegt auch die nächste Periode am selben Tag */
+  /** Belegt auch die nächste Lektion (ohne Pause dazwischen) */
   doubleLesson: z.coerce.boolean().optional().default(false),
 });
 
 export const UpsertTimetableExceptionBodySchema = z.object({
   classId: z.string().cuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  period: z.coerce.number().int().min(1).max(8),
+  period: z.coerce.number().int().min(1).max(20),
   type: z.enum(['CANCEL', 'OVERRIDE']),
   subjectId: z.string().cuid().optional().nullable(),
   teacherId: z.string().cuid().optional().nullable(),
@@ -27,6 +33,20 @@ export const UpsertTimetableExceptionBodySchema = z.object({
   (d) => d.type === 'CANCEL' || (Boolean(d.subjectId) && Boolean(d.teacherId)),
   { message: 'Bei OVERRIDE sind Fach und Lehrperson erforderlich.', path: ['subjectId'] }
 );
+
+export const SaveTimetableStructureBodySchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        type: z.enum(['LESSON', 'BREAK']),
+        label: z.string().min(1).max(80),
+        startTime: timeOptional,
+        endTime: timeOptional,
+      })
+    )
+    .min(1)
+    .max(40),
+});
 
 export const TimetableQuerySchema = z.object({
   classId: z.string().cuid(),

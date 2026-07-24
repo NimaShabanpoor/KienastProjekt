@@ -1,4 +1,5 @@
-// Feste Perioden für den Wochenstundenplan (SchulAdmin)
+// Tageszeiten kommen aus der API (/timetable/structure).
+// Diese Konstanten dienen nur noch als Fallback / Typ-Referenz.
 
 export interface TimetablePeriod {
   period: number;
@@ -7,7 +8,7 @@ export interface TimetablePeriod {
   label: string;
 }
 
-/** Unterrichtsperioden 1–8 (Pausen nur in der UI) */
+/** Fallback, falls die API noch keine Struktur liefert */
 export const TIMETABLE_PERIODS: TimetablePeriod[] = [
   { period: 1, startTime: '08:00', endTime: '08:45', label: '1. Lektion' },
   { period: 2, startTime: '08:45', endTime: '09:30', label: '2. Lektion' },
@@ -35,5 +36,5 @@ export function getPeriod(period: number): TimetablePeriod | undefined {
 export function toSchoolDayOfWeek(date: Date): number | null {
   const js = date.getDay();
   if (js === 0 || js === 6) return null;
-  return js; // 1=Mo … 5=Fr
+  return js;
 }

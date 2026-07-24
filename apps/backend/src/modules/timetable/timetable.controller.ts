@@ -64,3 +64,18 @@ export const removeException = async (req: Request, res: Response, next: NextFun
     res.json({ data: { message: 'Ausnahme gelöscht.' } });
   } catch (err) { next(err); }
 };
+
+export const getStructure = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const data = await timetableService.getStructure();
+    res.json({ data });
+  } catch (err) { next(err); }
+};
+
+export const saveStructure = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const body = req.body as { rows: Parameters<typeof timetableService.saveStructure>[0] };
+    const data = await timetableService.saveStructure(body.rows);
+    res.json({ data });
+  } catch (err) { next(err); }
+};

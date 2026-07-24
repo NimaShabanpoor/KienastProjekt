@@ -30,6 +30,12 @@ enum TimetableExceptionType {
   OVERRIDE
 }
 
+// Zeile in der Tagesstruktur: Lektion oder Pause
+enum TimetableRowType {
+  LESSON
+  BREAK
+}
+
 // Entität-Typen für den AuditLog
 enum AuditEntityType {
   USER
@@ -189,14 +195,33 @@ model Lesson {
 }
 
 // ============================================================
+// STUNDENPLAN-TAGESSTRUKTUR (Zeiten & Pausen, vom Admin pflegbar)
+// ============================================================
+model TimetableStructureRow {
+  id        String           @id @default(cuid())
+  sortOrder Int
+  type      TimetableRowType
+  label     String
+  startTime String?
+  endTime   String?
+  period    Int?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([period])
+  @@index([sortOrder])
+  @@map("timetable_structure")
+}
+
+// ============================================================
 // STUNDENPLAN-VORLAGE (wiederkehrend Mo–Fr, pro Klasse)
-// dayOfWeek: 1=Mo … 5=Fr, period: 1–8
+// dayOfWeek: 1=Mo … 5=Fr, period: Nummer der LESSON-Zeile
 // ============================================================
 model TimetableSlot {
   id        String   @id @default(cuid())
   classId   String
   dayOfWeek Int      // 1=Montag … 5=Freitag
-  period    Int      // 1–8
+  period    Int      // Lektionsnummer (siehe TimetableStructureRow.period)
   subjectId String
   teacherId String
   room      String?
