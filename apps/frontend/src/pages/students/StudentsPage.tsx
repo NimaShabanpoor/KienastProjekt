@@ -8,10 +8,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Student, Class } from '@schuladmin/shared';
 
+type StatusFilter = 'active' | 'inactive' | 'all';
+
 export default function StudentsPage() {
   const queryClient = useQueryClient();
   const { canManageStudents, isTeacher } = usePermissions();
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [showForm, setShowForm] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -20,10 +23,20 @@ export default function StudentsPage() {
   const [gender, setGender] = useState<'M' | 'F' | 'D' | ''>('');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['students', search],
+    queryKey: ['students', search, statusFilter, canManageStudents],
     queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set('limit', '100');
+      if (search) params.set('search', search);
+      if (canManageStudents) {
+        if (statusFilter === 'active') params.set('isActive', 'true');
+        if (statusFilter === 'inactive') params.set('isActive', 'false');
+        // 'all' → kein isActive-Filter
+      } else {
+        params.set('isActive', 'true');
+      }
       const { data } = await apiClient.get<{ data: Student[] }>(
-        `/api/v1/students${search ? `?search=${encodeURIComponent(search)}` : ''}`
+        `/api/v1/students?${params.toString()}`
       );
       return data.data;
     },
@@ -56,6 +69,16 @@ export default function StudentsPage() {
       setEmail('');
       setClassId('');
       setGender('');
+    },
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const endpoint = isActive ? 'deactivate' : 'activate';
+      await apiClient.patch(`/api/v1/students/${id}/${endpoint}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['students'] });
     },
   });
 
@@ -108,15 +131,28 @@ export default function StudentsPage() {
         </form>
       )}
 
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-        <input
-          type="text"
-          placeholder="Name oder E-Mail suchen..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
-        />
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <input
+            type="text"
+            placeholder="Name oder E-Mail suchen..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
+          />
+        </div>
+        {canManageStudents && (
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="px-3 py-2.5 border border-neutral-300 rounded-lg text-sm bg-white"
+          >
+            <option value="active">Nur aktive</option>
+            <option value="inactive">Nur inaktive</option>
+            <option value="all">Alle</option>
+          </select>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
@@ -129,7 +165,7 @@ export default function StudentsPage() {
         {!isLoading && data?.length === 0 && (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
-            <p className="text-neutral-500 font-medium">Noch keine Schüler vorhanden.</p>
+            <p className="text-neutral-500 font-medium">Keine Schüler gefunden.</p>
           </div>
         )}
         {!isLoading && data && data.length > 0 && (
@@ -141,6 +177,9 @@ export default function StudentsPage() {
                   <th className="text-left text-xs font-medium text-neutral-500 uppercase px-4 py-3">Klasse</th>
                   <th className="text-left text-xs font-medium text-neutral-500 uppercase px-4 py-3">E-Mail</th>
                   <th className="text-left text-xs font-medium text-neutral-500 uppercase px-4 py-3">Status</th>
+                  {canManageStudents && (
+                    <th className="text-right text-xs font-medium text-neutral-500 uppercase px-4 py-3">Aktion</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -158,6 +197,23 @@ export default function StudentsPage() {
                         {student.isActive ? 'Aktiv' : 'Inaktiv'}
                       </span>
                     </td>
+                    {canManageStudents && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleActiveMutation.mutate({
+                              id: student.id,
+                              isActive: student.isActive,
+                            })
+                          }
+                          disabled={toggleActiveMutation.isPending}
+                          className="text-xs font-medium text-brand-red hover:underline disabled:opacity-50"
+                        >
+                          {student.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

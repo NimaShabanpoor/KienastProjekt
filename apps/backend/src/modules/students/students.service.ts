@@ -50,7 +50,11 @@ export async function listStudents(params: ListStudentsParams) {
   }
 
   const where = {
-    ...(isActive !== undefined ? { isActive } : { isActive: true }),
+    ...(requestingUserRole === Role.LEHRPERSON
+      ? { isActive: true }
+      : isActive !== undefined
+        ? { isActive }
+        : {}),
     ...(classId ? { classId } : {}),
     ...(allowedClassIds ? { classId: { in: allowedClassIds } } : {}),
     ...(search ? {

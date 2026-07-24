@@ -106,15 +106,31 @@ export default function StudentDetailPage() {
         {!editing ? (
           <>
             <div className="flex items-start justify-between gap-4">
-              <h1 className="text-2xl font-bold text-neutral-900">{student.firstName} {student.lastName}</h1>
+              <div>
+                <h1 className="text-2xl font-bold text-neutral-900">{student.firstName} {student.lastName}</h1>
+                <span className={`inline-flex mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${student.isActive ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-500'}`}>
+                  {student.isActive ? 'Aktiv' : 'Inaktiv'}
+                </span>
+              </div>
               {canManageStudents && (
                 <div className="flex gap-2">
                   <button onClick={startEdit} className="text-sm text-brand-red font-medium">Bearbeiten</button>
                   <button
-                    onClick={() => toggleActiveMutation.mutate()}
-                    className="text-sm text-neutral-600 font-medium"
+                    type="button"
+                    onClick={() => {
+                      const action = student.isActive ? 'deaktivieren' : 'aktivieren';
+                      if (window.confirm(`Schüler wirklich ${action}?`)) {
+                        toggleActiveMutation.mutate();
+                      }
+                    }}
+                    disabled={toggleActiveMutation.isPending}
+                    className={`text-sm font-medium px-3 py-1.5 rounded-lg border disabled:opacity-50 ${
+                      student.isActive
+                        ? 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'
+                        : 'border-green-200 text-green-700 hover:bg-green-50'
+                    }`}
                   >
-                    {student.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                    {student.isActive ? 'Inaktiv setzen' : 'Wieder aktivieren'}
                   </button>
                 </div>
               )}
@@ -122,7 +138,6 @@ export default function StudentDetailPage() {
             <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
               <div><span className="text-neutral-500">Klasse:</span> <span className="font-medium">{student.class?.name ?? '–'}</span></div>
               <div><span className="text-neutral-500">E-Mail:</span> <span className="font-medium">{student.email ?? '–'}</span></div>
-              <div><span className="text-neutral-500">Status:</span> <span className={`font-medium ${student.isActive ? 'text-green-600' : 'text-neutral-400'}`}>{student.isActive ? 'Aktiv' : 'Inaktiv'}</span></div>
             </div>
           </>
         ) : (
