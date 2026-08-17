@@ -1,10 +1,13 @@
 # Produktions-Dockerfile für das Backend
-# Multi-Stage Build für kleineres Image
-FROM node:20-alpine AS builder
+# Multi-Stage Build für ein kleines, sicheres Image (non-root)
 
+FROM node:20-alpine AS builder
 WORKDIR /app
+
+# ALLE Abhängigkeiten (inkl. devDependencies) – der TypeScript-Compiler
+# (tsc) und die Prisma-CLI liegen in devDependencies und werden zum Bauen benötigt.
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 COPY prisma ./prisma/
 RUN npx prisma generate
@@ -13,13 +16,26 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
+# devDependencies entfernen – der generierte Prisma-Client (@prisma/client
+# und node_modules/.prisma) bleibt als Runtime-Abhängigkeit erhalten.
+RUN npm prune --omit=dev
+
+# --------------------------------------------------------
 # Produktions-Image
+# --------------------------------------------------------
 FROM node:20-alpine
 WORKDIR /app
+ENV NODE_ENV=production
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/package.json ./package.json
+
+# Nicht als root laufen (Least Privilege)
+RUN addgroup -S nodejs && adduser -S nodejs -G nodejs \
+  && mkdir -p /app/logs && chown -R nodejs:nodejs /app
+USER nodejs
 
 EXPOSE 3001
 CMD ["node", "dist/app.js"]

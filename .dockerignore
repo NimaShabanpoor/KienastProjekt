@@ -1,0 +1,13 @@
+# Gilt für Builds mit Repo-Root als Kontext (z. B. Frontend-Prod-Image)
+**/node_modules
+**/dist
+**/logs
+**/*.log
+.git
+.gitignore
+.env
+.env.*
+**/.env
+**/.env.*
+*.md
+docs

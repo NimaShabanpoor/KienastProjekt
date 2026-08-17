@@ -1,6 +1,4 @@
 # Produktions-Konfiguration – SchulAdmin
-version: "3.9"
-
 services:
   db:
     image: mysql:8.0
@@ -27,22 +25,36 @@ services:
       DATABASE_URL: mysql://${DB_USER}:${DB_PASSWORD}@db:3306/schuladmin
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       NODE_ENV: production
       PORT: 3001
-    ports:
-      - "3001:3001"
+      # Pflichtfelder – ohne diese schlägt die Env-Validierung fehl (Crash-Loop)
+      FRONTEND_URL: ${FRONTEND_URL}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      TOTP_APP_NAME: ${TOTP_APP_NAME:-SchulAdmin}
+      TOTP_ISSUER: ${TOTP_ISSUER:-IT Bénédict Zürich}
+      ABSENCE_THRESHOLD: ${ABSENCE_THRESHOLD:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FILE_PATH: ${LOG_FILE_PATH:-./logs}
+    # Kein öffentlicher Port: nur intern für den Frontend-Reverse-Proxy erreichbar
+    expose:
+      - "3001"
     depends_on:
       db:
         condition: service_healthy
 
   frontend:
     build:
-      context: ./apps/frontend
-      dockerfile: Dockerfile.prod
+      # Repo-Root als Kontext, damit das geteilte Paket (packages/shared) verfügbar ist
+      context: .
+      dockerfile: apps/frontend/Dockerfile.prod
+      args:
+        # Leere Basis-URL => relative /api-Aufrufe, die nginx an das Backend weiterleitet
+        VITE_API_URL: ""
     restart: always
     ports:
       - "80:80"
-      - "443:443"
     depends_on:
       - backend
 

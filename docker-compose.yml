@@ -1,6 +1,5 @@
 # Lokale Entwicklungsumgebung – SchulAdmin
 # Startet MySQL, Backend und Frontend
-version: "3.9"
 
 services:
   db:
@@ -46,7 +45,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: npx ts-node-dev --respawn --transpile-only src/app.ts
+    command: sh -c "npx prisma generate && npx ts-node-dev --respawn --transpile-only src/app.ts"
 
   frontend:
     build:
