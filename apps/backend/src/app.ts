@@ -18,11 +18,19 @@ import authRoutes from './modules/auth/auth.routes';
 import usersRoutes from './modules/users/users.routes';
 import studentsRoutes from './modules/students/students.routes';
 import classesRoutes from './modules/classes/classes.routes';
+import subjectsRoutes from './modules/subjects/subjects.routes';
 import lessonsRoutes from './modules/lessons/lessons.routes';
 import absencesRoutes from './modules/absences/absences.routes';
 import gradesRoutes from './modules/grades/grades.routes';
+import exportsRoutes from './modules/exports/exports.routes';
 
 const app = express();
+
+// Hinter einem Reverse-Proxy (nginx) die echte Client-IP aus X-Forwarded-For
+// verwenden – wichtig für korrektes Rate-Limiting und Audit-Logging.
+if (env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 // ============================================================
 // SICHERHEITS-MIDDLEWARES
@@ -93,9 +101,11 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/students', studentsRoutes);
 app.use('/api/v1/classes', classesRoutes);
+app.use('/api/v1/subjects', subjectsRoutes);
 app.use('/api/v1/lessons', lessonsRoutes);
 app.use('/api/v1/absences', absencesRoutes);
 app.use('/api/v1/grades', gradesRoutes);
+app.use('/api/v1/exports', exportsRoutes);
 
 // ============================================================
 // FEHLERBEHANDLUNG
