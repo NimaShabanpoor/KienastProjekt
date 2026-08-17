@@ -12,6 +12,7 @@ import { Role } from '@prisma/client';
 interface AccessTokenPayload {
   sub: string;   // userId
   role: Role;
+  type: 'access'; // Unterscheidet Access- von Temp-/Refresh-Tokens
   iat: number;
   exp: number;
 }
@@ -36,7 +37,18 @@ export const authMiddleware = (
 
   try {
     // Token verifizieren und Payload dekodieren
-    const payload = jwt.verify(token, env.JWT_SECRET) as AccessTokenPayload;
+    const payload = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as AccessTokenPayload;
+
+    // Token-Typ erzwingen: Nur echte Access-Tokens dürfen passieren.
+    // Der 2FA-Temp-Token ist mit demselben Secret signiert, hat aber keinen
+    // 'access'-Typ – so wird eine 2FA-Umgehung über auth-only-Routen verhindert.
+    if (payload.type !== 'access' || !payload.role) {
+      res.status(401).json({
+        error: 'Ungültiger Token.',
+        code: 'INVALID_TOKEN',
+      });
+      return;
+    }
 
     // Benutzer-Informationen auf Request setzen
     req.user = {

@@ -2,7 +2,7 @@
 // Login, 2FA-Setup, 2FA-Verify, Token-Refresh, Logout
 
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import speakeasy from 'speakeasy';
 import qrcode from 'qrcode';
 import crypto from 'crypto';
@@ -11,12 +11,14 @@ import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { BCRYPT_ROUNDS, BACKUP_CODE_CONFIG, JWT_CONSTANTS } from '../../config/constants';
+import { encryptSecret, decryptSecret } from '../../utils/crypto';
 import { Role } from '@prisma/client';
 
 // Token-Payload-Interfaces
 interface AccessTokenPayload {
   sub: string;
   role: Role;
+  type: 'access';
 }
 
 interface TempTokenPayload {
@@ -76,7 +78,7 @@ export async function login(email: string, password: string) {
     data: { lastLoginAt: new Date() },
   });
 
-  logger.info('Benutzer angemeldet', { userId: user.id, email: user.email });
+  logger.info('Benutzer angemeldet', { userId: user.id });
 
   return {
     requiresTOTP: false as const,
@@ -100,7 +102,7 @@ export async function verify2FA(tempToken: string, totpCode: string) {
   // Temp-Token verifizieren
   let payload: TempTokenPayload;
   try {
-    payload = jwt.verify(tempToken, env.JWT_SECRET) as TempTokenPayload;
+    payload = jwt.verify(tempToken, env.JWT_SECRET, { algorithms: ['HS256'] }) as TempTokenPayload;
   } catch {
     throw new ApiError('Ungültiger oder abgelaufener Token.', 'INVALID_TOKEN', 401);
   }
@@ -114,13 +116,15 @@ export async function verify2FA(tempToken: string, totpCode: string) {
     throw new ApiError('Benutzer nicht gefunden.', 'USER_NOT_FOUND', 404);
   }
 
-  // TOTP-Code prüfen
-  const valid = speakeasy.totp.verify({
-    secret: user.totpSecret,
+  // TOTP-Code prüfen (Secret entschlüsseln); alternativ Backup-Code akzeptieren
+  const totpValid = speakeasy.totp.verify({
+    secret: decryptSecret(user.totpSecret),
     encoding: 'base32',
     token: totpCode,
     window: JWT_CONSTANTS.TOTP_WINDOW,
   });
+
+  const valid = totpValid || (await consumeBackupCode(user.id, user.backupCodes, totpCode));
 
   if (!valid) {
     throw new ApiError('Ungültiger 2FA-Code.', 'INVALID_TOTP', 401);
@@ -177,10 +181,10 @@ export async function setup2FA(userId: string) {
   // Backup-Codes generieren (noch nicht in DB speichern – erst nach Confirm)
   const backupCodes = generateBackupCodes();
 
-  // Secret temporär in DB speichern (noch nicht aktiviert)
+  // Secret verschlüsselt und temporär in DB speichern (noch nicht aktiviert)
   await prisma.user.update({
     where: { id: userId },
-    data: { totpSecret: secret.base32 },
+    data: { totpSecret: encryptSecret(secret.base32) },
   });
 
   logger.info('2FA-Setup initiiert', { userId });
@@ -205,9 +209,9 @@ export async function confirm2FA(userId: string, totpCode: string) {
     );
   }
 
-  // Code gegen temporär gespeichertes Secret prüfen
+  // Code gegen temporär gespeichertes (verschlüsseltes) Secret prüfen
   const valid = speakeasy.totp.verify({
-    secret: user.totpSecret,
+    secret: decryptSecret(user.totpSecret),
     encoding: 'base32',
     token: totpCode,
     window: JWT_CONSTANTS.TOTP_WINDOW,
@@ -247,7 +251,7 @@ export async function confirm2FA(userId: string, totpCode: string) {
 export async function refreshAccessToken(refreshToken: string) {
   let payload: RefreshTokenPayload;
   try {
-    payload = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET) as RefreshTokenPayload;
+    payload = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET, { algorithms: ['HS256'] }) as RefreshTokenPayload;
   } catch {
     throw new ApiError('Ungültiger oder abgelaufener Refresh-Token.', 'INVALID_REFRESH_TOKEN', 401);
   }
@@ -264,7 +268,10 @@ export async function refreshAccessToken(refreshToken: string) {
   // Refresh-Token gegen gespeicherten Hash prüfen (Token-Rotation-Sicherheit)
   const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
   if (user.refreshTokenHash !== tokenHash) {
-    logger.warn('Refresh-Token-Wiederverwendung erkannt!', { userId: user.id });
+    // Wiederverwendung eines (rotierten) Tokens: gesamte Session widerrufen,
+    // damit auch der aktuell gültige Token ungültig wird (Token-Family-Revocation).
+    logger.warn('Refresh-Token-Wiederverwendung erkannt – Session wird widerrufen!', { userId: user.id });
+    await prisma.user.update({ where: { id: user.id }, data: { refreshTokenHash: null } });
     throw new ApiError('Ungültiger Refresh-Token.', 'INVALID_REFRESH_TOKEN', 401);
   }
 
@@ -312,15 +319,15 @@ export async function getMe(userId: string) {
 // Access + Refresh Token ausstellen und Refresh-Hash in DB speichern
 async function issueTokens(userId: string, role: Role) {
   const accessToken = jwt.sign(
-    { sub: userId, role } satisfies AccessTokenPayload,
+    { sub: userId, role, type: 'access' } satisfies AccessTokenPayload,
     env.JWT_SECRET,
-    { expiresIn: env.JWT_ACCESS_EXPIRES_IN }
+    { expiresIn: env.JWT_ACCESS_EXPIRES_IN as SignOptions['expiresIn'] }
   );
 
   const refreshToken = jwt.sign(
     { sub: userId, type: 'refresh' } satisfies RefreshTokenPayload,
     env.JWT_REFRESH_SECRET,
-    { expiresIn: env.JWT_REFRESH_EXPIRES_IN }
+    { expiresIn: env.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'] }
   );
 
   // SHA256-Hash des Refresh-Tokens in DB speichern
@@ -331,6 +338,39 @@ async function issueTokens(userId: string, role: Role) {
   });
 
   return { accessToken, refreshToken };
+}
+
+// Prüft einen eingegebenen Backup-Code gegen die gehashten Codes des Benutzers.
+// Bei Treffer wird der Code einmalig verbraucht (aus der Liste entfernt).
+async function consumeBackupCode(
+  userId: string,
+  storedBackupCodes: string | null,
+  candidate: string
+): Promise<boolean> {
+  if (!storedBackupCodes) return false;
+
+  let hashes: string[];
+  try {
+    hashes = JSON.parse(storedBackupCodes) as string[];
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(hashes) || hashes.length === 0) return false;
+
+  const normalized = candidate.trim().toUpperCase();
+  for (let i = 0; i < hashes.length; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    if (await bcrypt.compare(normalized, hashes[i]!)) {
+      const remaining = hashes.filter((_, idx) => idx !== i);
+      await prisma.user.update({
+        where: { id: userId },
+        data: { backupCodes: JSON.stringify(remaining) },
+      });
+      logger.warn('2FA-Backup-Code verwendet', { userId, remaining: remaining.length });
+      return true;
+    }
+  }
+  return false;
 }
 
 // Zufällige Backup-Codes generieren

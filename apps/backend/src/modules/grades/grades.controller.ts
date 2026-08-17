@@ -56,7 +56,12 @@ export const getAverage = async (req: Request, res: Response, next: NextFunction
       res.status(400).json({ error: 'studentId und subjectId erforderlich.', code: 'MISSING_PARAMS' });
       return;
     }
-    const average = await gradesService.calculateWeightedAverage(studentId, subjectId);
+    const average = await gradesService.getStudentSubjectAverage(
+      studentId,
+      subjectId,
+      req.user!.id,
+      req.user!.role
+    );
     res.json({ data: { average } });
   } catch (err) { next(err); }
 };

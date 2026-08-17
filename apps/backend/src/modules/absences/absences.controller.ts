@@ -1,24 +1,26 @@
 // Absenzen-Controller
 
 import { Request, Response, NextFunction } from 'express';
+import { AbsenceStatus } from '@prisma/client';
 import * as absencesService from './absences.service';
+import { prisma } from '../../config/database';
 import { env } from '../../config/env';
+
+const ABSENCE_STATUSES = Object.values(AbsenceStatus);
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { prisma } = await import('../../config/database');
-    const absences = await prisma.absence.findMany({
-      where: {
-        ...(req.query['lessonId'] && { lessonId: req.query['lessonId'] as string }),
-        ...(req.query['studentId'] && { studentId: req.query['studentId'] as string }),
-        ...(req.query['status'] && { status: req.query['status'] as 'ANWESEND' | 'ENTSCHULDIGT' | 'UNENTSCHULDIGT' }),
-      },
-      include: {
-        student: { select: { id: true, firstName: true, lastName: true } },
-        lesson: { select: { id: true, date: true, startTime: true, endTime: true } },
-        recordedBy: { select: { id: true, firstName: true, lastName: true } },
-      },
-      take: 100,
+    const statusParam = req.query['status'] as string | undefined;
+    if (statusParam && !ABSENCE_STATUSES.includes(statusParam as AbsenceStatus)) {
+      res.status(400).json({ error: 'Ungültiger Absenz-Status.', code: 'VALIDATION_ERROR' });
+      return;
+    }
+    const absences = await absencesService.listAbsences({
+      lessonId: req.query['lessonId'] as string | undefined,
+      studentId: req.query['studentId'] as string | undefined,
+      status: statusParam as AbsenceStatus | undefined,
+      requestingUserId: req.user!.id,
+      requestingUserRole: req.user!.role,
     });
     res.json({ data: absences });
   } catch (err) { next(err); }
@@ -52,14 +54,22 @@ export const getStats = async (req: Request, res: Response, next: NextFunction):
       studentId: req.query['studentId'] as string | undefined,
       dateFrom: req.query['dateFrom'] as string | undefined,
       dateTo: req.query['dateTo'] as string | undefined,
+      requestingUserId: req.user!.id,
+      requestingUserRole: req.user!.role,
     });
     res.json({ data: stats });
   } catch (err) { next(err); }
 };
 
-export const getAlerts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getAlerts = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const threshold = env.ABSENCE_THRESHOLD;
+    // Denselben Schwellenwert wie der Cron-Job verwenden (DB-Config vor ENV-Fallback)
+    const config = await prisma.config.findUnique({ where: { key: 'ABSENCE_THRESHOLD' } });
+    let threshold = env.ABSENCE_THRESHOLD;
+    if (config) {
+      const parsed = Number(JSON.parse(config.value));
+      if (Number.isInteger(parsed) && parsed > 0) threshold = parsed;
+    }
     const alerts = await absencesService.getThresholdAlerts(threshold);
     res.json({ data: alerts });
   } catch (err) { next(err); }

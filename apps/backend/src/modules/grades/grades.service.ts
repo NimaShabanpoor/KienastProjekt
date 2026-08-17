@@ -9,6 +9,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { GRADE_LIMITS } from '../../config/constants';
+import { assertStudentAccessible, assertSubjectAccessible } from '../../utils/access';
 
 interface CreateGradeInput {
   studentId: string;
@@ -39,12 +40,22 @@ export async function listGrades(params: {
     allowedSubjectIds = subjects.map((s) => s.id);
   }
 
+  // Fach-Filter: expliziter subjectId-Wunsch mit der Lehrpersonen-Beschränkung
+  // verschneiden (Spread-Kollision würde sonst einen Filter überschreiben).
+  let subjectIdWhere: string | { in: string[] } | undefined;
+  if (allowedSubjectIds) {
+    subjectIdWhere = subjectId
+      ? (allowedSubjectIds.includes(subjectId) ? subjectId : { in: [] as string[] })
+      : { in: allowedSubjectIds };
+  } else if (subjectId) {
+    subjectIdWhere = subjectId;
+  }
+
   const where = {
-    ...(subjectId && { subjectId }),
+    ...(subjectIdWhere !== undefined && { subjectId: subjectIdWhere }),
     ...(studentId && { studentId }),
     ...(categoryId && { categoryId }),
     ...(classId && { subject: { classId } }),
-    ...(allowedSubjectIds && { subjectId: { in: allowedSubjectIds } }),
   };
 
   return prisma.grade.findMany({
@@ -75,6 +86,25 @@ export async function createGrade(input: CreateGradeInput, createdById: string, 
       'FORBIDDEN',
       403
     );
+  }
+
+  // Datenintegrität: Kategorie muss zum Fach gehören
+  const category = await prisma.gradeCategory.findUnique({
+    where: { id: input.categoryId },
+    select: { subjectId: true },
+  });
+  if (!category || category.subjectId !== input.subjectId) {
+    throw new ApiError('Notenkategorie gehört nicht zu diesem Fach.', 'CATEGORY_MISMATCH', 400);
+  }
+
+  // Datenintegrität: Schüler muss zur Klasse des Fachs gehören
+  const student = await prisma.student.findUnique({
+    where: { id: input.studentId },
+    select: { classId: true },
+  });
+  if (!student) throw new ApiError('Schüler nicht gefunden.', 'STUDENT_NOT_FOUND', 404);
+  if (student.classId !== subject.classId) {
+    throw new ApiError('Schüler gehört nicht zur Klasse dieses Fachs.', 'STUDENT_NOT_IN_CLASS', 400);
   }
 
   // Note erstellen und sofort sperren
@@ -176,6 +206,19 @@ export async function calculateWeightedAverage(
   return Math.round(raw * 2) / 2;
 }
 
+// Gescopeter Zugriff auf den Fachdurchschnitt eines Schülers.
+// Lehrperson: nur eigene Fächer und Schüler der eigenen Klassen.
+export async function getStudentSubjectAverage(
+  studentId: string,
+  subjectId: string,
+  requestingUserId: string,
+  requestingUserRole: Role
+): Promise<number | null> {
+  await assertSubjectAccessible(subjectId, requestingUserId, requestingUserRole);
+  await assertStudentAccessible(studentId, requestingUserId, requestingUserRole);
+  return calculateWeightedAverage(studentId, subjectId);
+}
+
 // --------------------------------------------------------
 // PROMOTIONSPRÜFUNG
 // --------------------------------------------------------
@@ -204,6 +247,7 @@ export async function checkPromotion(classId: string, schoolYear: string) {
       );
 
       const validAverages = averages.filter((a): a is number => a !== null);
+      const missingSubjects = averages.length - validAverages.length;
 
       if (validAverages.length === 0) {
         return {
@@ -211,12 +255,25 @@ export async function checkPromotion(classId: string, schoolYear: string) {
           status: 'KEINE_NOTEN' as const,
           overallAverage: null,
           failingSubjects: 0,
+          missingSubjects,
         };
       }
 
       const overallAverage =
         Math.round((validAverages.reduce((a, b) => a + b, 0) / validAverages.length) * 100) / 100;
       const failingSubjects = validAverages.filter((a) => a < GRADE_LIMITS.PASS_THRESHOLD).length;
+
+      // Bei fehlenden Fachnoten keine (womöglich falsch-positive) Promotionsentscheidung treffen
+      if (missingSubjects > 0) {
+        return {
+          student: { id: student.id, firstName: student.firstName, lastName: student.lastName },
+          status: 'UNVOLLSTAENDIG' as const,
+          overallAverage,
+          failingSubjects,
+          missingSubjects,
+        };
+      }
+
       const passed = overallAverage >= rule.minAverage && failingSubjects <= rule.maxFailing;
 
       return {
@@ -224,6 +281,7 @@ export async function checkPromotion(classId: string, schoolYear: string) {
         status: passed ? ('BESTANDEN' as const) : ('NICHT_BESTANDEN' as const),
         overallAverage,
         failingSubjects,
+        missingSubjects,
       };
     })
   );

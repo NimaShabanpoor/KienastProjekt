@@ -126,9 +126,16 @@ export async function updateUser(id: string, input: UpdateUserInput) {
     }
   }
 
+  // Nur explizit erlaubte Felder aktualisieren (kein Mass-Assignment)
+  const data: UpdateUserInput = {};
+  if (input.firstName !== undefined) data.firstName = input.firstName;
+  if (input.lastName !== undefined) data.lastName = input.lastName;
+  if (input.email !== undefined) data.email = input.email;
+  if (input.role !== undefined) data.role = input.role;
+
   return prisma.user.update({
     where: { id },
-    data: input,
+    data,
     select: {
       id: true, email: true, firstName: true, lastName: true,
       role: true, isActive: true, updatedAt: true,

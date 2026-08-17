@@ -15,6 +15,10 @@ const EnvSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
+  // Optionaler Schlüssel zur Verschlüsselung sensibler Werte (z. B. TOTP-Secrets).
+  // Ohne Angabe wird ein Schlüssel aus JWT_SECRET abgeleitet.
+  ENCRYPTION_KEY: z.string().min(32).optional(),
+
   // App
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),

@@ -22,10 +22,10 @@ async function validateAbsenceCreation(
   lessonId: string,
   teacherId: string,
   role: Role
-): Promise<void> {
+): Promise<{ classId: string }> {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    include: { subject: { select: { teacherId: true } } },
+    include: { subject: { select: { teacherId: true, classId: true } } },
   });
 
   if (!lesson) throw new ApiError('Lektion nicht gefunden.', 'LESSON_NOT_FOUND', 404);
@@ -46,6 +46,8 @@ async function validateAbsenceCreation(
       403
     );
   }
+
+  return { classId: lesson.subject.classId };
 }
 
 export async function createAbsenceBatch(
@@ -54,7 +56,21 @@ export async function createAbsenceBatch(
   recordedById: string,
   role: Role
 ) {
-  await validateAbsenceCreation(lessonId, recordedById, role);
+  const { classId } = await validateAbsenceCreation(lessonId, recordedById, role);
+
+  // Nur Schüler der Klasse dieser Lektion dürfen erfasst werden (keine fremden studentIds)
+  const studentIds = [...new Set(absences.map((a) => a.studentId))];
+  const validStudents = await prisma.student.findMany({
+    where: { id: { in: studentIds }, classId },
+    select: { id: true },
+  });
+  if (validStudents.length !== studentIds.length) {
+    throw new ApiError(
+      'Mindestens ein Schüler gehört nicht zur Klasse dieser Lektion.',
+      'STUDENT_NOT_IN_CLASS',
+      400
+    );
+  }
 
   // Upsert: eine Transaktion für alle Einträge
   const results = await prisma.$transaction(
@@ -107,19 +123,60 @@ export async function updateAbsence(
   });
 }
 
+// Absenzen auflisten – für eine Lehrperson auf ihre eigenen Lektionen begrenzt
+export async function listAbsences(params: {
+  lessonId?: string;
+  studentId?: string;
+  status?: AbsenceStatus;
+  requestingUserId: string;
+  requestingUserRole: Role;
+}) {
+  const { lessonId, studentId, status, requestingUserId, requestingUserRole } = params;
+
+  const where = {
+    ...(lessonId && { lessonId }),
+    ...(studentId && { studentId }),
+    ...(status && { status }),
+    // Lehrperson: nur Absenzen aus eigenen Lektionen
+    ...(requestingUserRole === Role.LEHRPERSON
+      ? { lesson: { subject: { teacherId: requestingUserId } } }
+      : {}),
+  };
+
+  return prisma.absence.findMany({
+    where,
+    include: {
+      student: { select: { id: true, firstName: true, lastName: true } },
+      lesson: { select: { id: true, date: true, startTime: true, endTime: true } },
+      recordedBy: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { recordedAt: 'desc' },
+    take: 100,
+  });
+}
+
 export async function getAbsenceStats(params: {
   classId?: string;
   studentId?: string;
   dateFrom?: string;
   dateTo?: string;
+  requestingUserId: string;
+  requestingUserRole: Role;
 }) {
-  const { classId, studentId, dateFrom, dateTo } = params;
+  const { classId, studentId, dateFrom, dateTo, requestingUserId, requestingUserRole } = params;
 
   const where = {
     ...(studentId && { studentId }),
     ...(classId && { student: { classId } }),
+    // Lehrperson: nur Absenzen aus eigenen Lektionen
+    ...(requestingUserRole === Role.LEHRPERSON
+      ? { lesson: { subject: { teacherId: requestingUserId } } }
+      : {}),
     ...(dateFrom || dateTo ? {
       lesson: {
+        ...(requestingUserRole === Role.LEHRPERSON
+          ? { subject: { teacherId: requestingUserId } }
+          : {}),
         date: {
           ...(dateFrom && { gte: new Date(dateFrom) }),
           ...(dateTo && { lte: new Date(dateTo) }),
