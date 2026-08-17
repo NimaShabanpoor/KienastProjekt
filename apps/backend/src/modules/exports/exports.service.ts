@@ -8,7 +8,6 @@ import { ApiError } from '../../middleware/errorHandler.middleware';
 import * as gradesService from '../grades/grades.service';
 import { ensureStructure } from '../timetable/timetable.service';
 
-const BRAND_RED = '#C8102E';
 const WEEKDAYS_FULL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'] as const;
 
 function escapeCsv(value: string | number | null | undefined): string {

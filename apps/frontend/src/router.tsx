@@ -2,7 +2,7 @@
 
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
-import { Role } from '@schuladmin/shared';
+import { Role } from '@schuladmin/shared/types/roles';
 import type { ReactNode } from 'react';
 import AppShell from './components/AppShell';
 
@@ -14,13 +14,16 @@ const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
 const StudentsPage = lazy(() => import('./pages/students/StudentsPage'));
 const StudentDetailPage = lazy(() => import('./pages/students/StudentDetailPage'));
 const ClassesPage = lazy(() => import('./pages/classes/ClassesPage'));
+const SubjectsPage = lazy(() => import('./pages/subjects/SubjectsPage'));
 const TimetablePage = lazy(() => import('./pages/timetable/TimetablePage'));
+const TimetablePrintPage = lazy(() => import('./pages/timetable/TimetablePrintPage'));
 const AbsencesPage = lazy(() => import('./pages/absences/AbsencesPage'));
 const AbsenceExcusePage = lazy(() => import('./pages/absences/AbsenceExcusePage'));
 const GradesPage = lazy(() => import('./pages/grades/GradesPage'));
-const ExportsPage = lazy(() => import('./pages/exports/ExportsPage'));
 const UsersPage = lazy(() => import('./pages/users/UsersPage'));
+const ExportsPage = lazy(() => import('./pages/exports/ExportsPage'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
+const ZeugnisPrintPage = lazy(() => import('./pages/reports/ZeugnisPrintPage'));
 
 function ProtectedRoute({
   children,
@@ -60,7 +63,10 @@ export const router = createBrowserRouter([
       { path: 'students', element: <StudentsPage /> },
       { path: 'students/:id', element: <StudentDetailPage /> },
       { path: 'classes', element: <ProtectedRoute requiredRole={leaderOnly}><ClassesPage /></ProtectedRoute> },
+      { path: 'subjects', element: <SubjectsPage /> },
       { path: 'timetable', element: <ProtectedRoute requiredRole={leaderOnly}><TimetablePage /></ProtectedRoute> },
+      { path: 'timetable/print', element: <TimetablePrintPage /> },
+      { path: 'zeugnis', element: <ZeugnisPrintPage /> },
       { path: 'absences', element: <AbsencesPage /> },
       { path: 'absences/excuse', element: <ProtectedRoute requiredRole={leaderOnly}><AbsenceExcusePage /></ProtectedRoute> },
       { path: 'grades', element: <GradesPage /> },

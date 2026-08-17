@@ -9,11 +9,13 @@ import { ROLE_LABELS, AbsenceStatus } from '@schuladmin/shared';
 import type { Absence } from '@schuladmin/shared';
 import { apiClient } from '../api/client';
 import { LayoutDashboard, AlertCircle, UserRound } from 'lucide-react';
+import Toaster from './ui/Toaster';
 
 const LEADER_LINKS = [
   { href: '/', label: 'Dashboard' },
   { href: '/students', label: 'Schüler' },
   { href: '/classes', label: 'Klassen' },
+  { href: '/subjects', label: 'Module' },
   { href: '/absences/excuse', label: 'Entschuldigen' },
   { href: '/grades', label: 'Noten' },
   { href: '/timetable', label: 'Stundenplan' },
@@ -26,6 +28,7 @@ const TEACHER_LINKS = [
   { href: '/absences', label: 'Anwesenheit' },
   { href: '/grades', label: 'Noten' },
   { href: '/students', label: 'Schüler' },
+  { href: '/subjects', label: 'Module' },
 ];
 
 export default function AppShell() {
@@ -52,6 +55,7 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
+      <Toaster />
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-2 font-bold text-brand-red shrink-0">

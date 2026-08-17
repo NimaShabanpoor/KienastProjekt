@@ -2,12 +2,17 @@
 
 import { Request, Response, NextFunction } from 'express';
 import * as lessonsService from './lessons.service';
+import { getPaginationParams } from '../../utils/pagination';
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await lessonsService.listLessons({
-      page: Number(req.query['page']) || 1,
+    const { page, limit } = getPaginationParams({
+      page: Number(req.query['page']) || undefined,
       limit: Number(req.query['limit']) || 50,
+    });
+    const result = await lessonsService.listLessons({
+      page,
+      limit,
       subjectId: req.query['subjectId'] as string | undefined,
       classId: req.query['classId'] as string | undefined,
       dateFrom: req.query['dateFrom'] as string | undefined,
@@ -49,7 +54,7 @@ export const cancel = async (req: Request, res: Response, next: NextFunction): P
   try {
     const id = req.params['id'] ?? '';
     const { reason } = req.body as { reason: string };
-    const lesson = await lessonsService.cancelLesson(id, reason);
+    const lesson = await lessonsService.cancelLesson(id, reason, req.user!.id, req.user!.role);
     req.auditEntityId = id;
     req.auditNewValue = { isCancelled: true, reason };
     res.json({ data: lesson });

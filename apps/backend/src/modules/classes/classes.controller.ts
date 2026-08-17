@@ -1,15 +1,20 @@
 // Klassen-Controller
+// Objekt-Zugriffskontrolle erfolgt im Service (assertClassAccessible –
+// berücksichtigt unterrichtete Fächer UND Klassenlehrer-Zuweisung).
 
-import { Role } from '@prisma/client';
 import { Request, Response, NextFunction } from 'express';
 import * as classesService from './classes.service';
-import { assertTeacherHasClassAccess } from '../../utils/teacherAccess';
+import { getPaginationParams } from '../../utils/pagination';
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const { page, limit } = getPaginationParams({
+      page: Number(req.query['page']) || undefined,
+      limit: Number(req.query['limit']) || undefined,
+    });
     const result = await classesService.listClasses({
-      page: Number(req.query['page']) || 1,
-      limit: Number(req.query['limit']) || 20,
+      page,
+      limit,
       schoolYear: req.query['schoolYear'] as string | undefined,
       semester: req.query['semester'] ? Number(req.query['semester']) : undefined,
       isActive: req.query['isActive'] !== undefined ? req.query['isActive'] === 'true' : undefined,
@@ -22,11 +27,7 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
 
 export const getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const id = req.params['id'] ?? '';
-    if (req.user!.role === Role.LEHRPERSON) {
-      await assertTeacherHasClassAccess(req.user!.id, id);
-    }
-    const cls = await classesService.getClassById(id);
+    const cls = await classesService.getClassById(req.params['id'] ?? '', req.user!.id, req.user!.role);
     res.json({ data: cls });
   } catch (err) { next(err); }
 };
@@ -60,34 +61,24 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
 
 export const getStudents = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const id = req.params['id'] ?? '';
-    if (req.user!.role === Role.LEHRPERSON) {
-      await assertTeacherHasClassAccess(req.user!.id, id);
-    }
-    const students = await classesService.getClassStudents(id);
+    const students = await classesService.getClassStudents(req.params['id'] ?? '', req.user!.id, req.user!.role);
     res.json({ data: students });
   } catch (err) { next(err); }
 };
 
 export const getSubjects = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const id = req.params['id'] ?? '';
-    if (req.user!.role === Role.LEHRPERSON) {
-      await assertTeacherHasClassAccess(req.user!.id, id);
-    }
-    const subjects = await classesService.getClassSubjects(id);
+    const subjects = await classesService.getClassSubjects(req.params['id'] ?? '', req.user!.id, req.user!.role);
     res.json({ data: subjects });
   } catch (err) { next(err); }
 };
 
 export const getTimetable = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const id = req.params['id'] ?? '';
-    if (req.user!.role === Role.LEHRPERSON) {
-      await assertTeacherHasClassAccess(req.user!.id, id);
-    }
     const timetable = await classesService.getClassTimetable(
-      id,
+      req.params['id'] ?? '',
+      req.user!.id,
+      req.user!.role,
       req.query['dateFrom'] as string | undefined,
       req.query['dateTo'] as string | undefined
     );

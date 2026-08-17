@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { getHomeroomClassIds } from '../../utils/teacherAccess';
+import { assertClassAccessible } from '../../utils/access';
 
 interface CreateClassInput {
   name: string;
@@ -75,7 +76,8 @@ export async function listClasses(params: {
   return { classes, total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
-export async function getClassById(id: string) {
+export async function getClassById(id: string, requestingUserId: string, requestingUserRole: Role) {
+  await assertClassAccessible(id, requestingUserId, requestingUserRole);
   const cls = await prisma.class.findUnique({
     where: { id },
     include: {
@@ -117,34 +119,50 @@ export async function createClass(input: CreateClassInput) {
 }
 
 export async function updateClass(id: string, input: UpdateClassInput) {
-  await getClassById(id);
+  const existing = await prisma.class.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) throw new ApiError('Klasse nicht gefunden.', 'CLASS_NOT_FOUND', 404);
   if (input.homeroomTeacherId !== undefined) {
     await validateHomeroomTeacher(input.homeroomTeacherId);
   }
+  // Nur explizit erlaubte Felder aktualisieren (kein Mass-Assignment)
+  const data: UpdateClassInput = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.semester !== undefined) data.semester = input.semester;
+  if (input.schoolYear !== undefined) data.schoolYear = input.schoolYear;
+  if (input.homeroomTeacherId !== undefined) data.homeroomTeacherId = input.homeroomTeacherId;
   return prisma.class.update({
     where: { id },
-    data: input,
+    data,
     include: {
       homeroomTeacher: { select: { id: true, firstName: true, lastName: true, email: true } },
     },
   });
 }
 
-export async function getClassStudents(classId: string) {
+export async function getClassStudents(classId: string, requestingUserId: string, requestingUserRole: Role) {
+  await assertClassAccessible(classId, requestingUserId, requestingUserRole);
   return prisma.student.findMany({
     where: { classId, isActive: true },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
   });
 }
 
-export async function getClassSubjects(classId: string) {
+export async function getClassSubjects(classId: string, requestingUserId: string, requestingUserRole: Role) {
+  await assertClassAccessible(classId, requestingUserId, requestingUserRole);
   return prisma.subject.findMany({
     where: { classId, isActive: true },
     include: { teacher: { select: { id: true, firstName: true, lastName: true } } },
   });
 }
 
-export async function getClassTimetable(classId: string, dateFrom?: string, dateTo?: string) {
+export async function getClassTimetable(
+  classId: string,
+  requestingUserId: string,
+  requestingUserRole: Role,
+  dateFrom?: string,
+  dateTo?: string
+) {
+  await assertClassAccessible(classId, requestingUserId, requestingUserRole);
   return prisma.lesson.findMany({
     where: {
       subject: { classId },
@@ -162,7 +180,8 @@ export async function createSubject(
   classId: string,
   input: { name: string; teacherId: string }
 ) {
-  await getClassById(classId);
+  const cls = await prisma.class.findUnique({ where: { id: classId }, select: { id: true } });
+  if (!cls) throw new ApiError('Klasse nicht gefunden.', 'CLASS_NOT_FOUND', 404);
 
   const teacher = await prisma.user.findFirst({
     where: { id: input.teacherId, role: Role.LEHRPERSON, isActive: true, deletedAt: null },

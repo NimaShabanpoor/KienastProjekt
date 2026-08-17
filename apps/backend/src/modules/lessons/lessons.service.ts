@@ -231,28 +231,55 @@ export async function updateLesson(id: string, input: Partial<CreateLessonInput>
   const existing = await getLessonById(id);
 
   if (input.date || input.startTime || input.endTime || input.room !== undefined) {
+    const effectiveStart = input.startTime ?? existing.startTime;
+    const effectiveEnd = input.endTime ?? existing.endTime;
+
+    // Auch bei Teil-Updates sicherstellen, dass Start vor Ende liegt
+    if (effectiveStart >= effectiveEnd) {
+      throw new ApiError(
+        'Die Startzeit muss vor der Endzeit liegen.',
+        'INVALID_TIME_RANGE',
+        400
+      );
+    }
+
     await checkLessonConflicts({
       subjectId: input.subjectId ?? existing.subjectId,
       date: input.date ?? existing.date.toISOString().split('T')[0]!,
-      startTime: input.startTime ?? existing.startTime,
-      endTime: input.endTime ?? existing.endTime,
+      startTime: effectiveStart,
+      endTime: effectiveEnd,
       room: input.room !== undefined ? input.room : existing.room,
       excludeLessonId: id,
     });
   }
 
+  // Nur bekannte Felder aktualisieren (kein Mass-Assignment über excludeLessonId o.ä.)
   return prisma.lesson.update({
     where: { id },
     data: {
-      ...input,
-      date: input.date ? new Date(input.date) : undefined,
-      isTest: input.isTest,
+      // Nur bekannte Felder aktualisieren (kein Mass-Assignment)
+      ...(input.subjectId !== undefined && { subjectId: input.subjectId }),
+      ...(input.date !== undefined && { date: new Date(input.date) }),
+      ...(input.startTime !== undefined && { startTime: input.startTime }),
+      ...(input.endTime !== undefined && { endTime: input.endTime }),
+      ...(input.room !== undefined && { room: input.room }),
+      ...(input.isTest !== undefined && { isTest: input.isTest }),
     },
   });
 }
 
-export async function cancelLesson(id: string, reason: string) {
+export async function cancelLesson(
+  id: string,
+  reason: string,
+  requestingUserId: string,
+  requestingUserRole: Role
+) {
   const lesson = await getLessonById(id);
+
+  // Lehrperson darf nur eigene Lektionen absagen
+  if (requestingUserRole === Role.LEHRPERSON && lesson.subject.teacher.id !== requestingUserId) {
+    throw new ApiError('Keine Berechtigung für diese Lektion.', 'FORBIDDEN', 403);
+  }
 
   if (lesson.isCancelled) {
     throw new ApiError('Lektion ist bereits als ausgefallen markiert.', 'ALREADY_CANCELLED', 409);

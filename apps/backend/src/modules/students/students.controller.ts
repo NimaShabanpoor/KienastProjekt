@@ -2,13 +2,17 @@
 
 import { Request, Response, NextFunction } from 'express';
 import * as studentsService from './students.service';
-import { Role } from '@prisma/client';
+import { getPaginationParams } from '../../utils/pagination';
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const { page, limit } = getPaginationParams({
+      page: Number(req.query['page']) || undefined,
+      limit: Number(req.query['limit']) || undefined,
+    });
     const result = await studentsService.listStudents({
-      page: Number(req.query['page']) || 1,
-      limit: Number(req.query['limit']) || 20,
+      page,
+      limit,
       classId: req.query['classId'] as string | undefined,
       isActive: req.query['isActive'] !== undefined ? req.query['isActive'] === 'true' : undefined,
       search: req.query['search'] as string | undefined,
@@ -21,7 +25,7 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
 
 export const getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const student = await studentsService.getStudentById(req.params['id'] ?? '');
+    const student = await studentsService.getStudentById(req.params['id'] ?? '', req.user!.id, req.user!.role);
     res.json({ data: student });
   } catch (err) { next(err); }
 };
@@ -64,14 +68,14 @@ export const activate = async (req: Request, res: Response, next: NextFunction):
 
 export const getAbsences = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const absences = await studentsService.getStudentAbsences(req.params['id'] ?? '');
+    const absences = await studentsService.getStudentAbsences(req.params['id'] ?? '', req.user!.id, req.user!.role);
     res.json({ data: absences });
   } catch (err) { next(err); }
 };
 
 export const getGrades = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const grades = await studentsService.getStudentGrades(req.params['id'] ?? '');
+    const grades = await studentsService.getStudentGrades(req.params['id'] ?? '', req.user!.id, req.user!.role);
     res.json({ data: grades });
   } catch (err) { next(err); }
 };

@@ -3,6 +3,7 @@
 // Kein Silent-Catch – alle Fehler werden geloggt
 
 import { Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { logger } from '../config/logger';
 
 // Typisierter API-Fehler für kontrollierte Fehlermeldungen
@@ -40,6 +41,42 @@ export const errorHandler = (
       error: err.message,
       code: err.code,
       details: err.details,
+    });
+    return;
+  }
+
+  // Bekannte Prisma-Fehler auf sinnvolle HTTP-Status abbilden (statt opak 500)
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    logger.warn('Prisma-Fehler', { code: err.code, path: req.path, method: req.method });
+    switch (err.code) {
+      case 'P2002': // Unique-Constraint verletzt
+        res.status(409).json({
+          error: 'Ein Datensatz mit diesen Werten existiert bereits.',
+          code: 'ALREADY_EXISTS',
+        });
+        return;
+      case 'P2025': // Datensatz nicht gefunden
+        res.status(404).json({
+          error: 'Der angeforderte Datensatz wurde nicht gefunden.',
+          code: 'NOT_FOUND',
+        });
+        return;
+      case 'P2003': // Fremdschlüssel-Constraint verletzt
+        res.status(400).json({
+          error: 'Ungültige Referenz auf einen verknüpften Datensatz.',
+          code: 'INVALID_REFERENCE',
+        });
+        return;
+      default:
+        break;
+    }
+  }
+
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    logger.warn('Prisma-Validierungsfehler', { path: req.path, method: req.method });
+    res.status(400).json({
+      error: 'Ungültige Anfragedaten.',
+      code: 'VALIDATION_ERROR',
     });
     return;
   }

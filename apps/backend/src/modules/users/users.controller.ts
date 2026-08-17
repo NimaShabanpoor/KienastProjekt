@@ -1,22 +1,18 @@
 // User-Controller: HTTP-Handler (nur Abteilungsleitung)
 
 import { Request, Response, NextFunction } from 'express';
-import * as usersService from './users.service';
 import { z } from 'zod';
 import { Role } from '@prisma/client';
-
-const CreateUserSchema = z.object({
-  email: z.string().email(),
-  firstName: z.string().min(1).max(100),
-  lastName: z.string().min(1).max(100),
-  role: z.nativeEnum(Role),
-  password: z.string().min(12),
-});
+import * as usersService from './users.service';
+import { getPaginationParams } from '../../utils/pagination';
+import { CreateUserBodySchema, UpdateUserBodySchema } from './users.schemas';
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const page = Number(req.query['page']) || 1;
-    const limit = Number(req.query['limit']) || 20;
+    const { page, limit } = getPaginationParams({
+      page: Number(req.query['page']) || undefined,
+      limit: Number(req.query['limit']) || undefined,
+    });
     const role = req.query['role'] as Role | undefined;
     const isActive = req.query['isActive'] !== undefined
       ? req.query['isActive'] === 'true'
@@ -35,7 +31,8 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
 
 export const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const input = CreateUserSchema.parse(req.body);
+    // Body wurde bereits von validateMiddleware(CreateUserBodySchema) validiert
+    const input = req.body as z.infer<typeof CreateUserBodySchema>;
     const user = await usersService.createUser(input);
     req.auditEntityId = user.id;
     req.auditNewValue = { email: user.email, role: user.role };
@@ -47,7 +44,8 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
   try {
     const id = req.params['id'] ?? '';
     const old = await usersService.getUserById(id);
-    const user = await usersService.updateUser(id, req.body as Record<string, unknown>);
+    // Body wurde bereits von validateMiddleware(UpdateUserBodySchema) validiert
+    const user = await usersService.updateUser(id, req.body as z.infer<typeof UpdateUserBodySchema>);
     req.auditEntityId = id;
     req.auditOldValue = { role: old.role };
     req.auditNewValue = { role: user.role };

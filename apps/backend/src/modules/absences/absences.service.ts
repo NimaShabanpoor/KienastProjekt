@@ -8,12 +8,12 @@
 import { AbsenceStatus, Role } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
-import type { File } from 'multer';
 import { prisma } from '../../config/database';
 import { getMedicalCertificateDir } from '../../config/upload';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { logger } from '../../config/logger';
 import { assertTeacherHasClassAccess } from '../../utils/teacherAccess';
+import { getTeacherClassIds } from '../../utils/access';
 
 interface AbsenceEntry {
   studentId: string;
@@ -128,6 +128,21 @@ export async function createAbsenceBatch(
     );
   }
 
+  // Nur Schüler der Klasse dieser Lektionen dürfen erfasst werden (keine fremden studentIds)
+  const batchClassId = lessons[0]!.subject.classId;
+  const studentIds = [...new Set(absences.map((a) => a.studentId))];
+  const validStudents = await prisma.student.findMany({
+    where: { id: { in: studentIds }, classId: batchClassId },
+    select: { id: true },
+  });
+  if (validStudents.length !== studentIds.length) {
+    throw new ApiError(
+      'Mindestens ein Schüler gehört nicht zur Klasse dieser Lektion.',
+      'STUDENT_NOT_IN_CLASS',
+      400
+    );
+  }
+
   for (const lesson of lessons) {
     await validateAbsenceCreation(lesson.id, recordedById, role);
   }
@@ -224,7 +239,7 @@ export async function updateAbsence(
 export async function recordMedicalCertificate(
   absenceId: string,
   hasMedicalCertificate: boolean,
-  file: File | undefined,
+  file: Express.Multer.File | undefined,
   role: Role
 ) {
   if (role !== Role.ABTEILUNGSLEITUNG) {
@@ -297,20 +312,37 @@ export async function getMedicalCertificateFile(absenceId: string, role: Role) {
   };
 }
 
+// Absenzen auflisten – für eine Lehrperson auf ihre zugänglichen Klassen begrenzt
 export async function listAbsences(params: {
   lessonId?: string;
   studentId?: string;
   status?: AbsenceStatus;
   classId?: string;
+  requestingUserId: string;
+  requestingUserRole: Role;
 }) {
-  const { lessonId, studentId, status, classId } = params;
+  const { lessonId, studentId, status, classId, requestingUserId, requestingUserRole } = params;
+
+  // Lehrperson: nur Absenzen aus den eigenen (unterrichteten/zugewiesenen) Klassen.
+  // Expliziter classId-Filter wird mit der Beschränkung verschnitten (keine Spread-Kollision).
+  let studentClassFilter: { classId: string | { in: string[] } } | undefined;
+  if (requestingUserRole === Role.LEHRPERSON) {
+    const allowedClassIds = await getTeacherClassIds(requestingUserId);
+    studentClassFilter = {
+      classId: classId
+        ? (allowedClassIds.includes(classId) ? classId : { in: [] as string[] })
+        : { in: allowedClassIds },
+    };
+  } else if (classId) {
+    studentClassFilter = { classId };
+  }
 
   return prisma.absence.findMany({
     where: {
       ...(lessonId && { lessonId }),
       ...(studentId && { studentId }),
       ...(status && { status }),
-      ...(classId && { student: { classId } }),
+      ...(studentClassFilter && { student: studentClassFilter }),
     },
     include: {
       student: {
@@ -348,14 +380,23 @@ export async function getAbsenceStats(params: {
   studentId?: string;
   dateFrom?: string;
   dateTo?: string;
+  requestingUserId: string;
+  requestingUserRole: Role;
 }) {
-  const { classId, studentId, dateFrom, dateTo } = params;
+  const { classId, studentId, dateFrom, dateTo, requestingUserId, requestingUserRole } = params;
 
   const where = {
     ...(studentId && { studentId }),
     ...(classId && { student: { classId } }),
+    // Lehrperson: nur Absenzen aus eigenen Lektionen
+    ...(requestingUserRole === Role.LEHRPERSON
+      ? { lesson: { subject: { teacherId: requestingUserId } } }
+      : {}),
     ...(dateFrom || dateTo ? {
       lesson: {
+        ...(requestingUserRole === Role.LEHRPERSON
+          ? { subject: { teacherId: requestingUserId } }
+          : {}),
         date: {
           ...(dateFrom && { gte: new Date(dateFrom) }),
           ...(dateTo && { lte: new Date(dateTo) }),

@@ -7,6 +7,7 @@ import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 import { PAGINATION } from '../../config/constants';
 import { getHomeroomClassIds } from '../../utils/teacherAccess';
+import { assertStudentAccessible } from '../../utils/access';
 
 interface CreateStudentInput {
   firstName: string;
@@ -80,7 +81,8 @@ export async function listStudents(params: ListStudentsParams) {
   return { students, total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
-export async function getStudentById(id: string) {
+export async function getStudentById(id: string, requestingUserId: string, requestingUserRole: Role) {
+  await assertStudentAccessible(id, requestingUserId, requestingUserRole);
   const student = await prisma.student.findUnique({
     where: { id },
     include: { class: { select: { id: true, name: true, schoolYear: true, semester: true } } },
@@ -106,8 +108,13 @@ export async function createStudent(input: CreateStudentInput) {
   });
 }
 
+async function assertStudentExists(id: string): Promise<void> {
+  const student = await prisma.student.findUnique({ where: { id }, select: { id: true } });
+  if (!student) throw new ApiError('Schüler nicht gefunden.', 'STUDENT_NOT_FOUND', 404);
+}
+
 export async function updateStudent(id: string, input: Partial<CreateStudentInput>) {
-  await getStudentById(id);
+  await assertStudentExists(id);
   return prisma.student.update({
     where: { id },
     data: {
@@ -119,7 +126,7 @@ export async function updateStudent(id: string, input: Partial<CreateStudentInpu
 }
 
 export async function deactivateStudent(id: string) {
-  await getStudentById(id);
+  await assertStudentExists(id);
   // Nur inaktiv – kein Soft-Delete
   return prisma.student.update({
     where: { id },
@@ -138,7 +145,12 @@ export async function activateStudent(id: string) {
   });
 }
 
-export async function getStudentAbsences(studentId: string) {
+export async function getStudentAbsences(
+  studentId: string,
+  requestingUserId: string,
+  requestingUserRole: Role
+) {
+  await assertStudentAccessible(studentId, requestingUserId, requestingUserRole);
   return prisma.absence.findMany({
     where: { studentId },
     include: {
@@ -159,9 +171,25 @@ export async function getStudentAbsences(studentId: string) {
   });
 }
 
-export async function getStudentGrades(studentId: string) {
+export async function getStudentGrades(
+  studentId: string,
+  requestingUserId: string,
+  requestingUserRole: Role
+) {
+  await assertStudentAccessible(studentId, requestingUserId, requestingUserRole);
+
+  // Lehrperson sieht nur Noten der eigenen Fächer; Abteilungsleitung sieht alle.
+  let subjectFilter: { subjectId: { in: string[] } } | undefined;
+  if (requestingUserRole === Role.LEHRPERSON) {
+    const subjects = await prisma.subject.findMany({
+      where: { teacherId: requestingUserId, isActive: true },
+      select: { id: true },
+    });
+    subjectFilter = { subjectId: { in: subjects.map((s) => s.id) } };
+  }
+
   return prisma.grade.findMany({
-    where: { studentId },
+    where: { studentId, ...(subjectFilter ?? {}) },
     include: {
       subject: { select: { id: true, name: true } },
       category: { select: { id: true, name: true, weight: true } },

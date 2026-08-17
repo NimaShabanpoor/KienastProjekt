@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Role } from '@schuladmin/shared';
+import { Role } from '@schuladmin/shared/types/roles';
 
 interface AuthUser {
   id: string;

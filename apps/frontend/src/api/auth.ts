@@ -1,7 +1,7 @@
 // Auth-API-Funktionen
 
 import { apiClient } from './client';
-import type { Role } from '@schuladmin/shared';
+import type { Role } from '@schuladmin/shared/types/roles';
 
 interface LoginResponse {
   requiresTOTP: boolean;
