@@ -71,7 +71,7 @@ Backend API: http://localhost:3001/api/v1
 
 ## Sicherheit & nDSG
 
-- 🔐 JWT-Auth mit TOTP 2FA (Pflicht für alle Benutzer)
+- 🔐 JWT-Auth mit TOTP 2FA (Muss für alle Benutzer)
 - 🔒 Soft Delete – Daten von Schülern werden nie hart gelöscht
 - 📋 Unveränderliches Audit-Log für alle kritischen Aktionen
 - 🛡️ Rate Limiting, Helmet HTTP-Security-Header
