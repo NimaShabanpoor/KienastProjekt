@@ -2,10 +2,25 @@
 
 import { Download, FileText, BarChart2, Users } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { useState } from 'react';
+import PageHeader from '../../components/ui/PageHeader';
+
+type ExportState = {
+  loadingEndpoint: string | null;
+  message: string | null;
+  tone: 'success' | 'error' | null;
+};
 
 export default function ExportsPage() {
+  const [exportState, setExportState] = useState<ExportState>({
+    loadingEndpoint: null,
+    message: null,
+    tone: null,
+  });
+
   const handleExport = async (endpoint: string, filename: string): Promise<void> => {
     try {
+      setExportState({ loadingEndpoint: endpoint, message: null, tone: null });
       const response = await apiClient.get(endpoint, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data as BlobPart]));
       const link = document.createElement('a');
@@ -14,78 +29,100 @@ export default function ExportsPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      setExportState({
+        loadingEndpoint: null,
+        message: `${filename} wurde heruntergeladen.`,
+        tone: 'success',
+      });
     } catch {
-      alert('Export fehlgeschlagen. Bitte versuche es erneut.');
+      setExportState({
+        loadingEndpoint: null,
+        message: 'Export fehlgeschlagen. Bitte versuche es erneut.',
+        tone: 'error',
+      });
     }
   };
 
+  const exportCards = [
+    {
+      endpoint: '/api/v1/exports/absences/csv',
+      filename: 'absenzen.csv',
+      title: 'Absenzen (CSV)',
+      description: 'Alle Absenzen als CSV-Datei exportieren',
+      icon: Users,
+      accent: 'bg-orange-50 text-orange-600',
+      cta: 'CSV exportieren',
+    },
+    {
+      endpoint: '/api/v1/exports/grades/excel',
+      filename: 'noten.xlsx',
+      title: 'Noten (Excel)',
+      description: 'Notenliste als Excel-Datei exportieren',
+      icon: BarChart2,
+      accent: 'bg-green-50 text-green-600',
+      cta: 'Excel exportieren',
+    },
+    {
+      endpoint: '/api/v1/exports/statistics/promotion',
+      filename: 'promotion.xlsx',
+      title: 'Promotionsbericht',
+      description: 'Bestehensquote und Promotionsstatus (Excel)',
+      icon: FileText,
+      accent: 'bg-blue-50 text-blue-600',
+      cta: 'Bericht exportieren',
+    },
+    {
+      endpoint: '/api/v1/exports/audit-log',
+      filename: 'audit-log.csv',
+      title: 'Audit-Log',
+      description: 'Alle kritischen Aktionen als CSV (nDSG)',
+      icon: FileText,
+      accent: 'bg-purple-50 text-purple-600',
+      cta: 'Log exportieren',
+    },
+  ];
+
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Download className="w-6 h-6 text-brand-red" />
-        <h1 className="text-2xl font-bold text-neutral-900">Exporte & Berichte</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Berichte"
+        title="Exporte & Berichte"
+        description="Alle wichtigsten Exporte an einem Ort. Jeder Export zeigt jetzt klaren Status statt eines störenden Browser-Alerts."
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Absenzen CSV */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-orange-50 rounded-lg"><Users className="w-4 h-4 text-orange-600" /></div>
-            <h3 className="font-semibold text-neutral-900">Absenzen (CSV)</h3>
-          </div>
-          <p className="text-sm text-neutral-500 mb-4">Alle Absenzen als CSV-Datei exportieren</p>
-          <button
-            onClick={() => void handleExport('/api/v1/exports/absences/csv', 'absenzen.csv')}
-            className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark"
-          >
-            <Download className="w-4 h-4" /> CSV exportieren
-          </button>
+      {exportState.message ? (
+        <div
+          className={`rounded-2xl px-4 py-3 text-sm ${
+            exportState.tone === 'success'
+              ? 'border border-green-200 bg-green-50 text-green-700'
+              : 'border border-rose-200 bg-rose-50 text-rose-700'
+          }`}
+        >
+          {exportState.message}
         </div>
+      ) : null}
 
-        {/* Noten Excel */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-green-50 rounded-lg"><BarChart2 className="w-4 h-4 text-green-600" /></div>
-            <h3 className="font-semibold text-neutral-900">Noten (Excel)</h3>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {exportCards.map((card) => (
+          <div key={card.endpoint} className="surface-card p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className={`rounded-2xl p-3 ${card.accent}`}>
+                <card.icon className="h-5 w-5" />
+              </div>
+              <h3 className="font-semibold text-slate-900">{card.title}</h3>
+            </div>
+            <p className="mb-5 text-sm leading-6 text-slate-500">{card.description}</p>
+            <button
+              type="button"
+              onClick={() => void handleExport(card.endpoint, card.filename)}
+              className="btn-primary"
+              disabled={exportState.loadingEndpoint === card.endpoint}
+            >
+              <Download className="h-4 w-4" />
+              {exportState.loadingEndpoint === card.endpoint ? 'Export läuft...' : card.cta}
+            </button>
           </div>
-          <p className="text-sm text-neutral-500 mb-4">Notenliste als Excel-Datei exportieren</p>
-          <button
-            onClick={() => void handleExport('/api/v1/exports/grades/excel', 'noten.xlsx')}
-            className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark"
-          >
-            <Download className="w-4 h-4" /> Excel exportieren
-          </button>
-        </div>
-
-        {/* Promotionsbericht */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-blue-50 rounded-lg"><FileText className="w-4 h-4 text-blue-600" /></div>
-            <h3 className="font-semibold text-neutral-900">Promotionsbericht</h3>
-          </div>
-          <p className="text-sm text-neutral-500 mb-4">Bestehensquote und Promotionsstatus</p>
-          <button
-            onClick={() => void handleExport('/api/v1/exports/statistics/promotion', 'promotion.pdf')}
-            className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark"
-          >
-            <Download className="w-4 h-4" /> Bericht exportieren
-          </button>
-        </div>
-
-        {/* Audit Log */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-purple-50 rounded-lg"><FileText className="w-4 h-4 text-purple-600" /></div>
-            <h3 className="font-semibold text-neutral-900">Audit-Log</h3>
-          </div>
-          <p className="text-sm text-neutral-500 mb-4">Alle kritischen Aktionen als CSV (nDSG)</p>
-          <button
-            onClick={() => void handleExport('/api/v1/exports/audit-log', 'audit-log.csv')}
-            className="flex items-center gap-2 text-sm bg-brand-red text-white px-3 py-2 rounded-lg hover:bg-brand-red-dark"
-          >
-            <Download className="w-4 h-4" /> Log exportieren
-          </button>
-        </div>
+        ))}
       </div>
     </div>
   );

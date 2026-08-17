@@ -4,9 +4,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import type { Lesson, Student } from '@schuladmin/shared';
-import { AbsenceStatus } from '@schuladmin/shared';
-import { CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import type { Lesson, Student } from '@schuladmin/shared/types/entities';
+import { AbsenceStatus } from '@schuladmin/shared/types/roles';
+import { AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import PageHeader from '../../components/ui/PageHeader';
+import EmptyState from '../../components/ui/EmptyState';
 
 type AbsenceEntry = { studentId: string; status: AbsenceStatus; note?: string | null };
 
@@ -77,16 +79,22 @@ export default function AbsencesPage() {
   });
 
   return (
-    <div className="p-4 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-neutral-900 mb-4">Absenzen erfassen</h1>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        eyebrow="Tagesgeschäft"
+        title="Absenzen erfassen"
+        description="Wähle eine heutige Lektion aus und markiere pro Schüler den passenden Anwesenheitsstatus."
+      />
 
-      {/* Lektionsauswahl */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-neutral-700 mb-2">Lektion auswählen</label>
+      <div className="surface-card p-6">
+        <label className="mb-2 block text-sm font-medium text-slate-700">Lektion auswählen</label>
         <select
           value={selectedLesson ?? ''}
-          onChange={(e) => { setSelectedLesson(e.target.value || null); setAbsences({}); }}
-          className="w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
+          onChange={(e) => {
+            setSelectedLesson(e.target.value || null);
+            setAbsences({});
+          }}
+          className="input-modern"
         >
           <option value="">-- Lektion auswählen --</option>
           {lessons?.map((lesson) => (
@@ -98,7 +106,14 @@ export default function AbsencesPage() {
         </select>
       </div>
 
-      {/* Schüler-Liste mit Status-Toggles */}
+      {!selectedLesson && (
+        <EmptyState
+          icon={<Clock className="h-6 w-6" />}
+          title="Lektion auswählen"
+          description="Sobald du eine Lektion auswählst, erscheinen hier alle zugehörigen Schüler mit den Status-Buttons."
+        />
+      )}
+
       {selectedLesson && students && (
         <div className="space-y-3">
           {students.map((student) => {
@@ -106,12 +121,11 @@ export default function AbsencesPage() {
             return (
               <div
                 key={student.id}
-                className="bg-white rounded-xl border border-neutral-200 p-4"
+                className="surface-card p-5"
               >
-                <p className="font-medium text-neutral-900 mb-3">
+                <p className="mb-3 font-medium text-slate-900">
                   {student.lastName}, {student.firstName}
                 </p>
-                {/* Status-Buttons (mind. 44px Touch-Target) */}
                 <div className="flex gap-2 flex-wrap">
                   {Object.entries(STATUS_CONFIG).map(([status, config]) => {
                     const isActive = currentStatus === status;
@@ -124,7 +138,7 @@ export default function AbsencesPage() {
                             [student.id]: status as AbsenceStatus,
                           }))
                         }
-                        className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] ${
+                        className={`flex min-h-[44px] items-center gap-1.5 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all ${
                           isActive ? config.style : config.inactive
                         }`}
                       >
@@ -138,18 +152,25 @@ export default function AbsencesPage() {
             );
           })}
 
-          {/* Speichern-Button */}
           <button
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
-            className="w-full bg-brand-red hover:bg-brand-red-dark text-white font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50 mt-4"
+            className="btn-primary mt-4 w-full py-3"
           >
             {saveMutation.isPending ? 'Speichern...' : 'Absenzen speichern'}
           </button>
 
           {saveMutation.isSuccess && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-              <p className="text-green-700 text-sm font-medium">✅ Absenzen gespeichert!</p>
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-center">
+              <p className="text-sm font-medium text-green-700">Absenzen gespeichert.</p>
+            </div>
+          )}
+
+          {saveMutation.isError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center">
+              <p className="text-sm font-medium text-red-700">
+                Absenzen konnten nicht gespeichert werden. Bitte erneut versuchen.
+              </p>
             </div>
           )}
         </div>

@@ -4,12 +4,21 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
+const API_BASE_URL = import.meta.env['VITE_API_URL'] ?? 'http://localhost:3001';
+
 export const apiClient = axios.create({
-  baseURL: import.meta.env['VITE_API_URL'] ?? 'http://localhost:3001',
+  baseURL: API_BASE_URL,
   withCredentials: true, // httpOnly Cookie für Refresh-Token senden
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Separater Client für den Token-Refresh: nutzt dieselbe Basis-URL,
+// löst aber KEINE Response-Interceptor-Schleife aus.
+const refreshClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
 });
 
 // Request-Interceptor: Access Token zum Header hinzufügen
@@ -26,7 +35,13 @@ apiClient.interceptors.request.use(
 
 // Flag um mehrfache Refresh-Versuche zu verhindern
 let isRefreshing = false;
-let pendingRequests: Array<(token: string) => void> = [];
+// Wartende Requests: werden bei Erfolg mit neuem Token fortgesetzt,
+// bei Fehler abgelehnt (sonst hängen sie für immer).
+interface PendingRequest {
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}
+let pendingRequests: PendingRequest[] = [];
 
 // Response-Interceptor: 401 = Token-Refresh versuchen
 apiClient.interceptors.response.use(
@@ -41,12 +56,15 @@ apiClient.interceptors.response.use(
     if (status === 401 && originalRequest && !originalRequest.headers['_retry']) {
       if (isRefreshing) {
         // Auf den laufenden Refresh warten
-        return new Promise((resolve) => {
-          pendingRequests.push((token: string) => {
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-            }
-            resolve(apiClient(originalRequest));
+        return new Promise((resolve, reject) => {
+          pendingRequests.push({
+            resolve: (token: string) => {
+              if (originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+              }
+              resolve(apiClient(originalRequest));
+            },
+            reject,
           });
         });
       }
@@ -55,17 +73,16 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const { data } = await axios.post<{ data: { accessToken: string } }>(
+        const { data } = await refreshClient.post<{ data: { accessToken: string } }>(
           '/api/v1/auth/refresh',
-          {},
-          { withCredentials: true }
+          {}
         );
 
         const newToken = data.data.accessToken;
         useAuthStore.getState().setAccessToken(newToken);
 
-        // Ausstehende Requests mit neuem Token ausführen
-        pendingRequests.forEach((cb) => cb(newToken));
+        // Ausstehende Requests mit neuem Token fortsetzen
+        pendingRequests.forEach((p) => p.resolve(newToken));
         pendingRequests = [];
 
         if (originalRequest.headers) {
@@ -73,10 +90,11 @@ apiClient.interceptors.response.use(
         }
 
         return apiClient(originalRequest);
-      } catch {
-        // Refresh fehlgeschlagen – Abmelden
-        useAuthStore.getState().logout();
+      } catch (refreshError) {
+        // Refresh fehlgeschlagen – wartende Requests ablehnen und abmelden
+        pendingRequests.forEach((p) => p.reject(refreshError));
         pendingRequests = [];
+        useAuthStore.getState().logout();
         window.location.href = '/login';
         return Promise.reject(error);
       } finally {

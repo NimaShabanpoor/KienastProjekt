@@ -1,15 +1,26 @@
 // Dashboard-Seite
 // Übersicht je nach Rolle: Lehrperson vs. Abteilungsleitung
 
+import type { ComponentType } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
-import { Users, BookOpen, AlertTriangle, BarChart2, CalendarDays, GraduationCap } from 'lucide-react';
+import {
+  ArrowRight,
+  AlertTriangle,
+  BarChart2,
+  BookOpen,
+  CalendarDays,
+  GraduationCap,
+  ShieldCheck,
+  Users,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
+import PageHeader from '../../components/ui/PageHeader';
 
 interface QuickActionCard {
   title: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   href: string;
   color: string;
 }
@@ -70,32 +81,53 @@ export default function DashboardPage() {
   const actions = isAdmin ? adminActions : teacherActions;
 
   return (
-    <div className="p-6">
-      {/* Begrüssung */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-neutral-900">
-          Guten Tag, {user?.firstName} {user?.lastName}
-        </h1>
-        <p className="text-neutral-500 mt-1">
-          {isAdmin ? 'Abteilungsleitung' : 'Lehrperson'} – IT Bénédict Zürich
-        </p>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Dashboard"
+        title={`Guten Tag, ${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()}
+        description={`Du bist als ${isAdmin ? 'Abteilungsleitung' : 'Lehrperson'} angemeldet. Nutze die Schnellaktionen, um direkt in deine wichtigsten Arbeitsbereiche zu springen.`}
+        actions={
+          <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
+            <ShieldCheck className="h-4 w-4" />
+            {user?.totpEnabled ? '2FA aktiv' : '2FA optional'}
+          </div>
+        }
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="stat-card">
+          <p className="text-sm text-slate-500">Rolle</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">
+            {isAdmin ? 'Abteilungsleitung' : 'Lehrperson'}
+          </p>
+        </div>
+        <div className="stat-card">
+          <p className="text-sm text-slate-500">Verfügbare Bereiche</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">{actions.length}</p>
+        </div>
+        <div className="stat-card">
+          <p className="text-sm text-slate-500">Schule</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">IT Bénédict Zürich</p>
+        </div>
       </div>
 
-      {/* Quick-Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {actions.map((action) => (
           <Link
             key={action.href}
             to={action.href}
-            className="block bg-white rounded-xl border border-neutral-200 p-5 hover:shadow-md hover:border-brand-red transition-all group"
+            className="group surface-card block overflow-hidden p-6 transition hover:-translate-y-1"
           >
-            <div className={`inline-flex p-3 rounded-xl mb-3 ${action.color}`}>
-              <action.icon className="w-5 h-5" />
+            <div className="flex items-start justify-between gap-4">
+              <div className={`inline-flex rounded-2xl p-3 ${action.color}`}>
+                <action.icon className="h-5 w-5" />
+              </div>
+              <ArrowRight className="h-5 w-5 text-slate-300 transition group-hover:translate-x-1 group-hover:text-brand-red" />
             </div>
-            <h3 className="font-semibold text-neutral-900 group-hover:text-brand-red transition-colors">
+            <h3 className="mt-8 text-lg font-semibold text-slate-950 transition-colors group-hover:text-brand-red">
               {action.title}
             </h3>
-            <p className="text-sm text-neutral-500 mt-1">{action.description}</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">{action.description}</p>
           </Link>
         ))}
       </div>

@@ -2,7 +2,7 @@
 // HINWEIS: Frontend-Guards sind nur UX – Sicherheit wird serverseitig erzwungen!
 
 import { useAuthStore } from '../store/authStore';
-import { Role } from '@schuladmin/shared';
+import { Role } from '@schuladmin/shared/types/roles';
 
 export function usePermissions() {
   const { user } = useAuthStore();

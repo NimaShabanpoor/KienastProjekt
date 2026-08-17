@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import { BarChart2 } from 'lucide-react';
+import { BarChart2, PieChart, ShieldAlert, UserCheck } from 'lucide-react';
+import PageHeader from '../../components/ui/PageHeader';
 
 interface AbsenceStats {
   totalAbsences: number;
@@ -21,31 +22,44 @@ export default function AbsenceStatsPage() {
   });
 
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <BarChart2 className="w-6 h-6 text-brand-red" />
-        <h1 className="text-2xl font-bold text-neutral-900">Absenzen-Statistiken</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Analyse"
+        title="Absenzen-Statistiken"
+        description="Verdichteter Überblick über Anwesenheit, entschuldigte und unentschuldigte Absenzen."
+      />
 
-      {isLoading && <div className="text-neutral-400">Laden...</div>}
+      {isLoading && <div className="surface-card p-8 text-slate-400">Laden...</div>}
 
       {data && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-neutral-200 p-5">
-            <p className="text-sm text-neutral-500">Total Absenzen</p>
-            <p className="text-3xl font-bold text-neutral-900 mt-1">{data.totalAbsences}</p>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="stat-card">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-500">Total Absenzen</p>
+              <BarChart2 className="h-5 w-5 text-brand-red" />
+            </div>
+            <p className="mt-3 text-3xl font-bold text-slate-900">{data.totalAbsences}</p>
           </div>
-          <div className="bg-white rounded-xl border border-neutral-200 p-5">
-            <p className="text-sm text-neutral-500">Entschuldigt</p>
-            <p className="text-3xl font-bold text-yellow-600 mt-1">{data.entschuldigt}</p>
+          <div className="stat-card">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-500">Entschuldigt</p>
+              <UserCheck className="h-5 w-5 text-yellow-600" />
+            </div>
+            <p className="mt-3 text-3xl font-bold text-yellow-600">{data.entschuldigt}</p>
           </div>
-          <div className="bg-white rounded-xl border border-neutral-200 p-5">
-            <p className="text-sm text-neutral-500">Unentschuldigt</p>
-            <p className="text-3xl font-bold text-red-600 mt-1">{data.unentschuldigt}</p>
+          <div className="stat-card">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-500">Unentschuldigt</p>
+              <ShieldAlert className="h-5 w-5 text-red-600" />
+            </div>
+            <p className="mt-3 text-3xl font-bold text-red-600">{data.unentschuldigt}</p>
           </div>
-          <div className="bg-white rounded-xl border border-neutral-200 p-5">
-            <p className="text-sm text-neutral-500">Unentschuldigt-Quote</p>
-            <p className="text-3xl font-bold text-neutral-900 mt-1">{data.quote}%</p>
+          <div className="stat-card">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-500">Unentschuldigt-Quote</p>
+              <PieChart className="h-5 w-5 text-slate-500" />
+            </div>
+            <p className="mt-3 text-3xl font-bold text-slate-900">{data.quote}%</p>
           </div>
         </div>
       )}
