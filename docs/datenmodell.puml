@@ -1,0 +1,176 @@
+@startuml SchulAdmin Datenmodell
+!theme plain
+skinparam linetype ortho
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 13
+skinparam roundCorner 8
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.2
+skinparam entity {
+  BackgroundColor #FAFAFA
+  BorderColor #C8102E
+  FontColor #111111
+}
+
+title SchulAdmin – Datenmodell
+
+entity "User\n(Lehrperson / Abteilungsleitung)" as User {
+  * id : String <<PK>>
+  --
+  * email : String <<UK>>
+  * firstName : String
+  * lastName : String
+  * role : LEHRPERSON | ABTEILUNGSLEITUNG
+  * isActive : Boolean
+  totpEnabled : Boolean
+}
+
+entity "Class" as Class {
+  * id : String <<PK>>
+  --
+  * name : String
+  * semester : Int
+  * schoolYear : String
+  homeroomTeacherId : String <<FK>>
+}
+
+entity "Student" as Student {
+  * id : String <<PK>>
+  --
+  * firstName : String
+  * lastName : String
+  email : String <<UK>>
+  * classId : String <<FK>>
+  * isActive : Boolean
+}
+
+entity "Subject\n(Modul, schulweit)" as Subject {
+  * id : String <<PK>>
+  --
+  * name : String <<UK>>
+  * color : String
+  * isActive : Boolean
+}
+
+entity "SubjectTeacher" as SubjectTeacher {
+  * subjectId : String <<PK,FK>>
+  * teacherId : String <<PK,FK>>
+}
+
+entity "Lesson" as Lesson {
+  * id : String <<PK>>
+  --
+  * classId : String <<FK>>
+  * subjectId : String <<FK>>
+  * teacherId : String <<FK>>
+  * date : Date
+  * startTime : String
+  * endTime : String
+  room : String
+  isTest : Boolean
+  isCancelled : Boolean
+}
+
+entity "TimetableSlot\n(Wochenvorlage)" as TimetableSlot {
+  * id : String <<PK>>
+  --
+  * classId : String <<FK>>
+  * dayOfWeek : Int
+  * period : Int
+  * subjectId : String <<FK>>
+  * teacherId : String <<FK>>
+  room : String
+}
+
+entity "TimetableException" as TimetableException {
+  * id : String <<PK>>
+  --
+  * classId : String <<FK>>
+  * date : Date
+  * period : Int
+  * type : CANCEL | OVERRIDE
+  subjectId : String <<FK>>
+  teacherId : String <<FK>>
+}
+
+entity "TimetableStructureRow" as Structure {
+  * id : String <<PK>>
+  --
+  * sortOrder : Int
+  * type : LESSON | BREAK
+  * label : String
+  startTime : String
+  endTime : String
+  period : Int <<UK>>
+}
+
+entity "SchoolHoliday" as Holiday {
+  * id : String <<PK>>
+  --
+  * date : Date <<UK>>
+  * name : String
+}
+
+entity "Absence" as Absence {
+  * id : String <<PK>>
+  --
+  * studentId : String <<FK>>
+  * lessonId : String <<FK>>
+  * status : ANWESEND | ENTSCHULDIGT | UNENTSCHULDIGT
+  recordedById : String <<FK>>
+}
+
+entity "GradeCategory" as GradeCategory {
+  * id : String <<PK>>
+  --
+  * subjectId : String <<FK>>
+  * name : String
+  * weight : Float
+}
+
+entity "Grade" as Grade {
+  * id : String <<PK>>
+  --
+  * studentId : String <<FK>>
+  * subjectId : String <<FK>>
+  * categoryId : String <<FK>>
+  * value : Float
+  * isLocked : Boolean
+  createdById : String <<FK>>
+}
+
+entity "GradeCorrection" as GradeCorrection {
+  * id : String <<PK>>
+  --
+  * gradeId : String <<FK>>
+  * oldValue : Float
+  * newValue : Float
+  * reason : String
+  correctedById : String <<FK>>
+}
+
+User ||--o{ SubjectTeacher : unterrichtet
+Subject ||--o{ SubjectTeacher : hat
+User ||--o{ Class : Klassenlehrer
+Class ||--o{ Student : enthaelt
+Class ||--o{ Lesson
+Class ||--o{ TimetableSlot
+Class ||--o{ TimetableException
+Subject ||--o{ Lesson
+User ||--o{ Lesson : Lehrperson
+Subject ||--o{ TimetableSlot
+User ||--o{ TimetableSlot
+Lesson ||--o{ Absence
+Student ||--o{ Absence
+User ||--o{ Absence : erfasst
+Subject ||--o{ GradeCategory
+Subject ||--o{ Grade
+Student ||--o{ Grade
+GradeCategory ||--o{ Grade
+Grade ||--o{ GradeCorrection
+User ||--o{ Grade : erstellt
+User ||--o{ GradeCorrection : korrigiert
+
+@enduml

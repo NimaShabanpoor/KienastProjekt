@@ -1,0 +1,165 @@
+%%{init: {"er": {"layoutDirection": "TB"}, "theme": "base", "themeVariables": {"primaryColor": "#ffffff", "primaryTextColor": "#111111", "primaryBorderColor": "#C8102E", "lineColor": "#444444", "tertiaryColor": "#f4f4f5", "fontFamily": "Segoe UI, Arial, sans-serif"}}}%%
+erDiagram
+  USER ||--o{ SUBJECT_TEACHER : unterrichtet
+  SUBJECT ||--o{ SUBJECT_TEACHER : hat
+  USER ||--o{ CLASS : klassenlehrer
+  CLASS ||--o{ STUDENT : enthaelt
+  CLASS ||--o{ LESSON : hat
+  CLASS ||--o{ TIMETABLE_SLOT : vorlage
+  CLASS ||--o{ TIMETABLE_EXCEPTION : ausnahme
+  SUBJECT ||--o{ LESSON : fach
+  USER ||--o{ LESSON : lehrperson
+  SUBJECT ||--o{ TIMETABLE_SLOT : modul
+  USER ||--o{ TIMETABLE_SLOT : lehrperson
+  SUBJECT ||--o{ TIMETABLE_EXCEPTION : optional
+  USER ||--o{ TIMETABLE_EXCEPTION : optional
+  LESSON ||--o{ ABSENCE : erfasst
+  STUDENT ||--o{ ABSENCE : hat
+  USER ||--o{ ABSENCE : erfasst_von
+  SUBJECT ||--o{ GRADE_CATEGORY : kategorien
+  SUBJECT ||--o{ GRADE : noten
+  STUDENT ||--o{ GRADE : erhaelt
+  GRADE_CATEGORY ||--o{ GRADE : gewichtet
+  USER ||--o{ GRADE : erstellt
+  GRADE ||--o{ GRADE_CORRECTION : korrektur
+  USER ||--o{ GRADE_CORRECTION : korrigiert
+  USER ||--o{ AUDIT_LOG : protokoll
+  USER ||--o{ NOTIFICATION : nachricht
+
+  USER {
+    string id PK
+    string email UK
+    string firstName
+    string lastName
+    enum role
+    boolean isActive
+    boolean totpEnabled
+  }
+
+  CLASS {
+    string id PK
+    string name
+    int semester
+    string schoolYear
+    string homeroomTeacherId FK
+  }
+
+  STUDENT {
+    string id PK
+    string firstName
+    string lastName
+    string email UK
+    string classId FK
+    boolean isActive
+  }
+
+  SUBJECT {
+    string id PK
+    string name UK
+    string color
+    boolean isActive
+  }
+
+  SUBJECT_TEACHER {
+    string subjectId PK_FK
+    string teacherId PK_FK
+  }
+
+  LESSON {
+    string id PK
+    string classId FK
+    string subjectId FK
+    string teacherId FK
+    date date
+    string startTime
+    string endTime
+    string room
+    boolean isTest
+    boolean isCancelled
+  }
+
+  TIMETABLE_SLOT {
+    string id PK
+    string classId FK
+    int dayOfWeek
+    int period
+    string subjectId FK
+    string teacherId FK
+    string room
+  }
+
+  TIMETABLE_EXCEPTION {
+    string id PK
+    string classId FK
+    date date
+    int period
+    enum type
+    string subjectId FK
+    string teacherId FK
+  }
+
+  TIMETABLE_STRUCTURE {
+    string id PK
+    int sortOrder
+    enum type
+    string label
+    string startTime
+    string endTime
+    int period UK
+  }
+
+  SCHOOL_HOLIDAY {
+    string id PK
+    date date UK
+    string name
+  }
+
+  ABSENCE {
+    string id PK
+    string studentId FK
+    string lessonId FK
+    enum status
+    boolean hasMedicalCertificate
+    string recordedById FK
+  }
+
+  GRADE_CATEGORY {
+    string id PK
+    string subjectId FK
+    string name
+    float weight
+  }
+
+  GRADE {
+    string id PK
+    string studentId FK
+    string subjectId FK
+    string categoryId FK
+    float value
+    boolean isLocked
+    string createdById FK
+  }
+
+  GRADE_CORRECTION {
+    string id PK
+    string gradeId FK
+    float oldValue
+    float newValue
+    string reason
+    string correctedById FK
+  }
+
+  NOTIFICATION {
+    string id PK
+    string userId FK
+    string type
+    boolean isRead
+  }
+
+  AUDIT_LOG {
+    string id PK
+    string userId FK
+    string action
+    enum entityType
+    string entityId
+  }
