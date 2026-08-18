@@ -122,7 +122,7 @@ async function main(): Promise<void> {
     },
   });
 
-  console.log(`Fächer für ${klasse1.name} erstellt: ${matheFach.name}, Englisch`);
+  console.log(`Fächer für ${klasse1.name} erstellt: Mathematik, Englisch`);
 
   // --------------------------------------------------------
   // Heutige Lektion für Anwesenheitstest
