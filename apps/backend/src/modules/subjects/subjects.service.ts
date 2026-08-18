@@ -1,102 +1,162 @@
 // Fächer-/Module-Service: CRUD
-// Ein Fach/Modul (z. B. "Modul 120") gehört zu genau einer Klasse und einer Lehrperson.
-// Lehrperson: sieht nur eigene Fächer. Anlegen/Ändern: nur Abteilungsleitung.
+// Module sind schulweit. Mehrere Lehrpersonen können ein Modul unterrichten.
 
 import { Role } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../middleware/errorHandler.middleware';
 
+const COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+const PALETTE = [
+  '#2563EB',
+  '#0EA5E9',
+  '#10B981',
+  '#F59E0B',
+  '#EF4444',
+  '#8B5CF6',
+  '#EC4899',
+  '#14B8A6',
+  '#D97706',
+  '#64748B',
+];
+
+const teacherSelect = { id: true, firstName: true, lastName: true } as const;
+const subjectInclude = {
+  teachers: { include: { teacher: { select: teacherSelect } } },
+  _count: { select: { lessons: true, grades: true, gradeCategories: true } },
+} as const;
+
+function flattenSubject<T extends { teachers: Array<{ teacher: { id: string; firstName: string; lastName: string } }> }>(
+  subject: T
+) {
+  const { teachers, ...rest } = subject;
+  return { ...rest, teachers: teachers.map((t) => t.teacher) };
+}
+
 interface CreateSubjectInput {
   name: string;
-  classId: string;
-  teacherId: string;
+  color?: string;
+  teacherIds: string[];
 }
 
 interface UpdateSubjectInput {
   name?: string;
-  teacherId?: string;
+  color?: string;
+  teacherIds?: string[];
   isActive?: boolean;
 }
 
+function assertColor(color: string | undefined): string | undefined {
+  if (color === undefined) return undefined;
+  if (!COLOR_RE.test(color)) {
+    throw new ApiError('Farbe muss ein Hex-Wert sein (z. B. #C8102E).', 'INVALID_COLOR', 400);
+  }
+  return color.toUpperCase();
+}
+
+async function assertTeachers(teacherIds: string[]): Promise<void> {
+  const unique = [...new Set(teacherIds)];
+  if (unique.length === 0) {
+    throw new ApiError('Mindestens eine Lehrperson zuweisen.', 'TEACHERS_REQUIRED', 400);
+  }
+  const teachers = await prisma.user.findMany({
+    where: { id: { in: unique }, role: Role.LEHRPERSON, isActive: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (teachers.length !== unique.length) {
+    throw new ApiError('Eine oder mehrere Lehrpersonen sind ungültig oder inaktiv.', 'TEACHER_NOT_FOUND', 404);
+  }
+}
+
 export async function listSubjects(params: {
-  classId?: string;
   teacherId?: string;
   isActive?: boolean;
   requestingUserId: string;
   requestingUserRole: Role;
 }) {
-  const { classId, teacherId, isActive, requestingUserId, requestingUserRole } = params;
+  const { teacherId, isActive, requestingUserId, requestingUserRole } = params;
 
   const where = {
-    ...(classId ? { classId } : {}),
-    ...(teacherId ? { teacherId } : {}),
     ...(isActive !== undefined ? { isActive } : {}),
-    // Lehrperson: nur eigene Fächer/Module
-    ...(requestingUserRole === Role.LEHRPERSON ? { teacherId: requestingUserId } : {}),
+    ...(teacherId ? { teachers: { some: { teacherId } } } : {}),
+    ...(requestingUserRole === Role.LEHRPERSON
+      ? { teachers: { some: { teacherId: requestingUserId } } }
+      : {}),
   };
 
-  return prisma.subject.findMany({
+  const rows = await prisma.subject.findMany({
     where,
-    include: {
-      class: { select: { id: true, name: true, schoolYear: true, semester: true } },
-      teacher: { select: { id: true, firstName: true, lastName: true } },
-      _count: { select: { lessons: true, grades: true, gradeCategories: true } },
-    },
+    include: subjectInclude,
     orderBy: [{ name: 'asc' }],
   });
-}
-
-async function assertClassAndTeacherExist(classId: string, teacherId: string): Promise<void> {
-  const [cls, teacher] = await Promise.all([
-    prisma.class.findUnique({ where: { id: classId }, select: { id: true } }),
-    prisma.user.findUnique({ where: { id: teacherId }, select: { id: true, isActive: true } }),
-  ]);
-  if (!cls) throw new ApiError('Klasse nicht gefunden.', 'CLASS_NOT_FOUND', 404);
-  if (!teacher || !teacher.isActive) {
-    throw new ApiError('Lehrperson nicht gefunden oder inaktiv.', 'TEACHER_NOT_FOUND', 404);
-  }
+  return rows.map(flattenSubject);
 }
 
 export async function createSubject(input: CreateSubjectInput) {
-  await assertClassAndTeacherExist(input.classId, input.teacherId);
+  await assertTeachers(input.teacherIds);
+  const name = input.name.trim();
+  const existing = await prisma.subject.findUnique({ where: { name } });
+  if (existing) {
+    throw new ApiError('Ein Modul mit diesem Namen existiert bereits.', 'SUBJECT_EXISTS', 409);
+  }
 
-  return prisma.subject.create({
-    data: { name: input.name, classId: input.classId, teacherId: input.teacherId },
+  const count = await prisma.subject.count();
+  const color = assertColor(input.color) ?? PALETTE[count % PALETTE.length]!;
+
+  const created = await prisma.subject.create({
+    data: {
+      name,
+      color,
+      teachers: { create: [...new Set(input.teacherIds)].map((teacherId) => ({ teacherId })) },
+      gradeCategories: {
+        create: [
+          { name: 'Prüfung', weight: 0.6 },
+          { name: 'Mündlich', weight: 0.4 },
+        ],
+      },
+    },
     include: {
-      class: { select: { id: true, name: true } },
-      teacher: { select: { id: true, firstName: true, lastName: true } },
+      teachers: { include: { teacher: { select: teacherSelect } } },
     },
   });
+  return flattenSubject(created);
 }
 
 export async function updateSubject(id: string, input: UpdateSubjectInput) {
   const existing = await prisma.subject.findUnique({ where: { id }, select: { id: true } });
   if (!existing) throw new ApiError('Fach nicht gefunden.', 'SUBJECT_NOT_FOUND', 404);
 
-  if (input.teacherId) {
-    const teacher = await prisma.user.findUnique({
-      where: { id: input.teacherId },
-      select: { id: true, isActive: true },
+  if (input.teacherIds) await assertTeachers(input.teacherIds);
+  if (input.name) {
+    const clash = await prisma.subject.findFirst({
+      where: { name: input.name.trim(), NOT: { id } },
+      select: { id: true },
     });
-    if (!teacher || !teacher.isActive) {
-      throw new ApiError('Lehrperson nicht gefunden oder inaktiv.', 'TEACHER_NOT_FOUND', 404);
-    }
+    if (clash) throw new ApiError('Ein Modul mit diesem Namen existiert bereits.', 'SUBJECT_EXISTS', 409);
   }
 
-  // Nur explizit erlaubte Felder aktualisieren (kein Mass-Assignment)
-  const data: UpdateSubjectInput = {};
-  if (input.name !== undefined) data.name = input.name;
-  if (input.teacherId !== undefined) data.teacherId = input.teacherId;
-  if (input.isActive !== undefined) data.isActive = input.isActive;
+  const color = assertColor(input.color);
 
-  return prisma.subject.update({
-    where: { id },
-    data,
-    include: {
-      class: { select: { id: true, name: true } },
-      teacher: { select: { id: true, firstName: true, lastName: true } },
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    if (input.teacherIds) {
+      await tx.subjectTeacher.deleteMany({ where: { subjectId: id } });
+      await tx.subjectTeacher.createMany({
+        data: [...new Set(input.teacherIds)].map((teacherId) => ({ subjectId: id, teacherId })),
+      });
+    }
+    return tx.subject.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(color !== undefined ? { color } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+      include: {
+        teachers: { include: { teacher: { select: teacherSelect } } },
+      },
+    });
   });
+
+  return flattenSubject(updated);
 }
 
 export async function deactivateSubject(id: string) {

@@ -35,24 +35,24 @@ export async function listGrades(params: {
       ? {
           ...(studentId && { studentId }),
           ...(categoryId && { categoryId }),
+          ...(classId && { student: { classId } }),
           subject: {
-            teacherId: requestingUserId,
+            teachers: { some: { teacherId: requestingUserId } },
             ...(subjectId && { id: subjectId }),
-            ...(classId && { classId }),
           },
         }
       : {
           ...(subjectId && { subjectId }),
           ...(studentId && { studentId }),
           ...(categoryId && { categoryId }),
-          ...(classId && { subject: { classId } }),
+          ...(classId && { student: { classId } }),
         };
 
   return prisma.grade.findMany({
     where,
     include: {
       student: { select: { id: true, firstName: true, lastName: true } },
-      subject: { select: { id: true, name: true, classId: true, teacherId: true } },
+      subject: { select: { id: true, name: true, color: true } },
       category: { select: { id: true, name: true, weight: true } },
       corrections: {
         orderBy: { correctedAt: 'desc' },
@@ -67,7 +67,7 @@ async function assertCanCreateGrade(
   subjectId: string,
   userId: string,
   role: Role
-): Promise<{ classId: string }> {
+): Promise<void> {
   if (role === Role.ABTEILUNGSLEITUNG) {
     throw new ApiError(
       'Der Leiter trägt keine Noten ein – nur Korrekturen. Noten vergibt der Fachlehrer.',
@@ -78,19 +78,21 @@ async function assertCanCreateGrade(
 
   const subject = await prisma.subject.findUnique({
     where: { id: subjectId },
-    select: { id: true, teacherId: true, classId: true, isActive: true },
+    select: { id: true, isActive: true },
   });
   if (!subject || !subject.isActive) {
     throw new ApiError('Fach nicht gefunden.', 'SUBJECT_NOT_FOUND', 404);
   }
-  if (subject.teacherId !== userId) {
+  const assigned = await prisma.subjectTeacher.findUnique({
+    where: { subjectId_teacherId: { subjectId, teacherId: userId } },
+  });
+  if (!assigned) {
     throw new ApiError(
       'Du kannst nur Noten für deine eigenen Fächer eintragen.',
       'FORBIDDEN',
       403
     );
   }
-  return { classId: subject.classId };
 }
 
 export async function createGrade(input: CreateGradeInput, createdById: string, role: Role) {
@@ -115,14 +117,6 @@ export async function createGrade(input: CreateGradeInput, createdById: string, 
   });
   if (!student?.isActive) {
     throw new ApiError('Schüler nicht gefunden.', 'STUDENT_NOT_FOUND', 404);
-  }
-
-  const subject = await prisma.subject.findUnique({
-    where: { id: input.subjectId },
-    select: { classId: true },
-  });
-  if (student.classId !== subject?.classId) {
-    throw new ApiError('Schüler gehört nicht zu diesem Fach/Klasse.', 'STUDENT_CLASS_MISMATCH', 400);
   }
 
 
@@ -156,7 +150,7 @@ export async function createGradeBatch(
   createdById: string,
   role: Role
 ) {
-  const { classId } = await assertCanCreateGrade(input.subjectId, createdById, role);
+  await assertCanCreateGrade(input.subjectId, createdById, role);
 
   const title = input.title.trim();
   if (!title) {
@@ -173,15 +167,14 @@ export async function createGradeBatch(
   const students = await prisma.student.findMany({
     where: {
       id: { in: input.entries.map((e) => e.studentId) },
-      classId,
       isActive: true,
     },
     select: { id: true },
   });
   if (students.length !== input.entries.length) {
     throw new ApiError(
-      'Ein oder mehrere Schüler gehören nicht zu dieser Klasse.',
-      'STUDENT_CLASS_MISMATCH',
+      'Ein oder mehrere Schüler wurden nicht gefunden.',
+      'STUDENT_NOT_FOUND',
       400
     );
   }
@@ -213,12 +206,11 @@ export async function createGradeBatch(
 
 export async function listTeacherSubjects(teacherId: string) {
   return prisma.subject.findMany({
-    where: { teacherId, isActive: true },
+    where: { isActive: true, teachers: { some: { teacherId } } },
     include: {
-      class: { select: { id: true, name: true } },
       gradeCategories: { select: { id: true, name: true, weight: true } },
     },
-    orderBy: [{ class: { name: 'asc' } }, { name: 'asc' }],
+    orderBy: [{ name: 'asc' }],
   });
 }
 
@@ -333,7 +325,14 @@ export async function checkPromotion(classId: string, schoolYear: string) {
     where: { classId, isActive: true },
   });
 
-  const subjects = await prisma.subject.findMany({ where: { classId } });
+  const slotSubjects = await prisma.timetableSlot.findMany({
+    where: { classId },
+    select: { subjectId: true },
+    distinct: ['subjectId'],
+  });
+  const subjects = await prisma.subject.findMany({
+    where: { id: { in: slotSubjects.map((s) => s.subjectId) } },
+  });
 
   const results = await Promise.all(
     students.map(async (student) => {

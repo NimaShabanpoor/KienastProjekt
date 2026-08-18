@@ -12,8 +12,7 @@ import { GraduationCap, Lock, Plus } from 'lucide-react';
 interface TeacherSubject {
   id: string;
   name: string;
-  classId: string;
-  class?: { id: string; name: string };
+  color?: string;
   gradeCategories?: GradeCategory[];
 }
 
@@ -28,6 +27,7 @@ export default function GradesPage() {
   const [reason, setReason] = useState('');
 
   const [subjectId, setSubjectId] = useState('');
+  const [gradeClassId, setGradeClassId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -45,15 +45,24 @@ export default function GradesPage() {
   const selectedSubject = mySubjects?.find((s) => s.id === subjectId);
   const categories = selectedSubject?.gradeCategories ?? [];
 
+  const { data: gradeClasses } = useQuery({
+    queryKey: ['classes'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: { id: string; name: string }[] }>('/api/v1/classes');
+      return data.data;
+    },
+    enabled: isTeacher && showForm,
+  });
+
   const { data: students } = useQuery({
-    queryKey: ['students', selectedSubject?.classId],
+    queryKey: ['students', gradeClassId],
     queryFn: async () => {
       const { data } = await apiClient.get<{ data: Student[] }>(
-        `/api/v1/students?classId=${selectedSubject!.classId}`
+        `/api/v1/students?classId=${gradeClassId}`
       );
       return data.data;
     },
-    enabled: !!selectedSubject?.classId && showForm,
+    enabled: !!gradeClassId && showForm,
   });
 
   const sortedStudents = useMemo(() => {
@@ -118,13 +127,13 @@ export default function GradesPage() {
   });
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <GraduationCap className="w-6 h-6 text-brand-red" />
           <div>
-            <h1 className="text-2xl font-bold text-neutral-900">Noten</h1>
-            <p className="text-sm text-neutral-500">
+            <h1 className="page-title">Noten</h1>
+            <p className="page-desc">
               {isTeacher
                 ? 'Testtitel vergeben und Noten für deine Klasse eintragen'
                 : 'Notenübersicht und Korrekturen'}
@@ -167,7 +176,26 @@ export default function GradesPage() {
                 <option value="">Fach wählen</option>
                 {mySubjects?.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} ({s.class?.name})
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Klasse</label>
+              <select
+                required
+                value={gradeClassId}
+                onChange={(e) => {
+                  setGradeClassId(e.target.value);
+                  setValues({});
+                }}
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+              >
+                <option value="">Klasse wählen</option>
+                {gradeClasses?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
                   </option>
                 ))}
               </select>

@@ -8,7 +8,6 @@ import type { z } from 'zod';
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const subjects = await subjectsService.listSubjects({
-      classId: req.query['classId'] as string | undefined,
       teacherId: req.query['teacherId'] as string | undefined,
       isActive:
         req.query['isActive'] !== undefined ? req.query['isActive'] === 'true' : undefined,
@@ -26,7 +25,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     const body = req.body as z.infer<typeof CreateSubjectBodySchema>;
     const subject = await subjectsService.createSubject(body);
     req.auditEntityId = subject.id;
-    req.auditNewValue = { name: subject.name, classId: subject.classId, teacherId: subject.teacherId };
+    req.auditNewValue = { name: subject.name, teacherIds: body.teacherIds, color: subject.color };
     res.status(201).json({ data: subject });
   } catch (err) {
     next(err);

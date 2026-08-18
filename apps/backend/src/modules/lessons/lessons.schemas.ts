@@ -5,7 +5,9 @@ import { z } from 'zod';
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const LessonBaseSchema = z.object({
+  classId: z.string().cuid('Ungültige Klassen-ID'),
   subjectId: z.string().cuid('Ungültige Fach-ID'),
+  teacherId: z.string().cuid('Ungültige Lehrpersonen-ID'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss YYYY-MM-DD sein'),
   startTime: z.string().regex(timeRegex, 'Startzeit muss HH:mm sein'),
   endTime: z.string().regex(timeRegex, 'Endzeit muss HH:mm sein'),

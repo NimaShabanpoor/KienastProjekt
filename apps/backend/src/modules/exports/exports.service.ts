@@ -10,6 +10,20 @@ import { ensureStructure } from '../timetable/timetable.service';
 
 const WEEKDAYS_FULL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'] as const;
 
+function lightenHex(hex: string, mix = 0.78): string {
+  const raw = hex.replace('#', '');
+  if (raw.length !== 6) return '#F2F2F2';
+  const n = parseInt(raw, 16);
+  if (Number.isNaN(n)) return '#F2F2F2';
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const lr = Math.round(r + (255 - r) * mix);
+  const lg = Math.round(g + (255 - g) * mix);
+  const lb = Math.round(b + (255 - b) * mix);
+  return `#${[lr, lg, lb].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
 function escapeCsv(value: string | number | null | undefined): string {
   const str = value == null ? '' : String(value);
   if (str.includes(';') || str.includes('"') || str.includes('\n')) {
@@ -341,7 +355,7 @@ export async function exportTimetablePdf(
     prisma.timetableSlot.findMany({
       where: { classId },
       include: {
-        subject: { select: { id: true, name: true } },
+        subject: { select: { id: true, name: true, color: true } },
         teacher: { select: { firstName: true, lastName: true } },
       },
     }),
@@ -505,7 +519,7 @@ export async function exportTimetablePdf(
           continue;
         }
 
-        paintCell(x, y, dayColW, rowH, LESSON_BG);
+        paintCell(x, y, dayColW, rowH, lightenHex(slot.subject.color ?? '#C8102E'));
 
         const textW = dayColW - cellPad * 2;
         let ty = y + cellPad + 1;

@@ -35,7 +35,7 @@ async function validateAbsenceCreation(
 ): Promise<string> {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    include: { subject: { select: { classId: true } } },
+    include: { class: { select: { id: true } } },
   });
 
   if (!lesson) throw new ApiError('Lektion nicht gefunden.', 'LESSON_NOT_FOUND', 404);
@@ -48,7 +48,7 @@ async function validateAbsenceCreation(
     );
   }
 
-  const classId = lesson.subject.classId;
+  const classId = lesson.classId;
 
   // Lehrer: nur zugewiesene Klasse
   if (role === Role.LEHRPERSON) {
@@ -111,7 +111,7 @@ export async function createAbsenceBatch(
   // Alle Lektionen validieren und chronologisch sortieren
   const lessons = await prisma.lesson.findMany({
     where: { id: { in: lessonIds } },
-    include: { subject: { select: { classId: true } } },
+    include: { class: { select: { id: true } } },
     orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
   });
 
@@ -119,7 +119,7 @@ export async function createAbsenceBatch(
     throw new ApiError('Eine oder mehrere Lektionen wurden nicht gefunden.', 'LESSON_NOT_FOUND', 404);
   }
 
-  const classIds = new Set(lessons.map((l) => l.subject.classId));
+  const classIds = new Set(lessons.map((l) => l.classId));
   if (classIds.size > 1) {
     throw new ApiError(
       'Alle Lektionen müssen zur selben Klasse gehören.',
@@ -129,7 +129,7 @@ export async function createAbsenceBatch(
   }
 
   // Nur Schüler der Klasse dieser Lektionen dürfen erfasst werden (keine fremden studentIds)
-  const batchClassId = lessons[0]!.subject.classId;
+  const batchClassId = lessons[0]!.classId;
   const studentIds = [...new Set(absences.map((a) => a.studentId))];
   const validStudents = await prisma.student.findMany({
     where: { id: { in: studentIds }, classId: batchClassId },
@@ -214,7 +214,7 @@ export async function updateAbsence(
 ) {
   const absence = await prisma.absence.findUnique({
     where: { id },
-    include: { lesson: { include: { subject: { select: { classId: true } } } } },
+    include: { lesson: true },
   });
 
   if (!absence) throw new ApiError('Absenz nicht gefunden.', 'ABSENCE_NOT_FOUND', 404);
@@ -390,12 +390,12 @@ export async function getAbsenceStats(params: {
     ...(classId && { student: { classId } }),
     // Lehrperson: nur Absenzen aus eigenen Lektionen
     ...(requestingUserRole === Role.LEHRPERSON
-      ? { lesson: { subject: { teacherId: requestingUserId } } }
+      ? { lesson: { teacherId: requestingUserId } }
       : {}),
     ...(dateFrom || dateTo ? {
       lesson: {
         ...(requestingUserRole === Role.LEHRPERSON
-          ? { subject: { teacherId: requestingUserId } }
+          ? { teacherId: requestingUserId }
           : {}),
         date: {
           ...(dateFrom && { gte: new Date(dateFrom) }),

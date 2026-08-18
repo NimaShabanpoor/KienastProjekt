@@ -6,7 +6,7 @@ import { ApiError } from '../../middleware/errorHandler.middleware';
 import { DEFAULT_TIMETABLE_STRUCTURE, toSchoolDayOfWeek } from '../../config/timetable';
 
 const slotInclude = {
-  subject: { select: { id: true, name: true, classId: true } },
+  subject: { select: { id: true, name: true, color: true } },
   teacher: { select: { id: true, firstName: true, lastName: true } },
 } as const;
 
@@ -381,7 +381,7 @@ export async function upsertSlot(input: {
     throw new ApiError('Raum ist erforderlich.', 'ROOM_REQUIRED', 400);
   }
 
-  await assertSubjectBelongsToClass(input.subjectId, input.classId);
+  await assertTeacherTeachesSubject(input.subjectId, input.teacherId);
   await assertTeacher(input.teacherId);
 
   const structure = await ensureStructure();
@@ -507,7 +507,7 @@ export async function listExceptions(classId: string, dateFrom?: string, dateTo?
         : {}),
     },
     include: {
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, color: true } },
       teacher: { select: { id: true, firstName: true, lastName: true } },
     },
     orderBy: [{ date: 'asc' }, { period: 'asc' }],
@@ -552,7 +552,6 @@ export async function upsertException(input: {
     if (!room) {
       throw new ApiError('Raum ist erforderlich.', 'ROOM_REQUIRED', 400);
     }
-    await assertSubjectBelongsToClass(input.subjectId, input.classId);
     await assertTeacher(input.teacherId);
     await assertTeacherFreeOnDate({
       teacherId: input.teacherId,
@@ -589,7 +588,7 @@ export async function upsertException(input: {
       isTest: input.type === 'OVERRIDE' ? (input.isTest ?? false) : null,
     },
     include: {
-      subject: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true, color: true } },
       teacher: { select: { id: true, firstName: true, lastName: true } },
     },
   });
@@ -653,7 +652,7 @@ export async function materializeLessonsForRange(params: {
         for (const slot of daySlots) {
           const periodMeta = periodMap.get(slot.period);
           if (!periodMeta) continue;
-          await cancelMaterializedLesson(slot.subjectId, dateStr, periodMeta.startTime);
+          await cancelMaterializedLesson(cls.id, dateStr, periodMeta.startTime);
         }
         continue;
       }
@@ -669,7 +668,7 @@ export async function materializeLessonsForRange(params: {
         );
 
         if (ex?.type === TimetableExceptionType.CANCEL) {
-          await cancelMaterializedLesson(slot.subjectId, dateStr, periodMeta.startTime);
+          await cancelMaterializedLesson(cls.id, dateStr, periodMeta.startTime);
           continue;
         }
 
@@ -684,8 +683,15 @@ export async function materializeLessonsForRange(params: {
             ? (ex.isTest ?? false)
             : slot.isTest;
 
+        const teacherId =
+          ex?.type === TimetableExceptionType.OVERRIDE && ex.teacherId
+            ? ex.teacherId
+            : slot.teacherId;
+
         await upsertMaterializedLesson({
+          classId: cls.id,
           subjectId,
+          teacherId,
           date: dateStr,
           startTime: periodMeta.startTime,
           endTime: periodMeta.endTime,
@@ -704,7 +710,9 @@ export async function materializeLessonsForRange(params: {
         const periodMeta = periodMap.get(ex.period);
         if (!periodMeta) continue;
         await upsertMaterializedLesson({
+          classId: cls.id,
           subjectId: ex.subjectId,
+          teacherId: ex.teacherId!,
           date: dateStr,
           startTime: periodMeta.startTime,
           endTime: periodMeta.endTime,
@@ -717,7 +725,9 @@ export async function materializeLessonsForRange(params: {
 }
 
 async function upsertMaterializedLesson(data: {
+  classId: string;
   subjectId: string;
+  teacherId: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -726,7 +736,7 @@ async function upsertMaterializedLesson(data: {
 }): Promise<void> {
   const existing = await prisma.lesson.findFirst({
     where: {
-      subjectId: data.subjectId,
+      classId: data.classId,
       date: new Date(data.date),
       startTime: data.startTime,
     },
@@ -736,6 +746,8 @@ async function upsertMaterializedLesson(data: {
     await prisma.lesson.update({
       where: { id: existing.id },
       data: {
+        subjectId: data.subjectId,
+        teacherId: data.teacherId,
         endTime: data.endTime,
         room: data.room,
         isTest: data.isTest,
@@ -746,7 +758,9 @@ async function upsertMaterializedLesson(data: {
   } else {
     await prisma.lesson.create({
       data: {
+        classId: data.classId,
         subjectId: data.subjectId,
+        teacherId: data.teacherId,
         date: new Date(data.date),
         startTime: data.startTime,
         endTime: data.endTime,
@@ -759,12 +773,12 @@ async function upsertMaterializedLesson(data: {
 }
 
 async function cancelMaterializedLesson(
-  subjectId: string,
+  classId: string,
   date: string,
   startTime: string
 ): Promise<void> {
   const existing = await prisma.lesson.findFirst({
-    where: { subjectId, date: new Date(date), startTime },
+    where: { classId, date: new Date(date), startTime },
   });
   if (existing && !existing.isCancelled) {
     await prisma.lesson.update({
@@ -774,10 +788,20 @@ async function cancelMaterializedLesson(
   }
 }
 
-async function assertSubjectBelongsToClass(subjectId: string, classId: string): Promise<void> {
-  const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
-  if (!subject || subject.classId !== classId) {
-    throw new ApiError('Fach gehört nicht zu dieser Klasse.', 'SUBJECT_CLASS_MISMATCH', 400);
+async function assertTeacherTeachesSubject(subjectId: string, teacherId: string): Promise<void> {
+  const subject = await prisma.subject.findUnique({ where: { id: subjectId }, select: { id: true, isActive: true } });
+  if (!subject || !subject.isActive) {
+    throw new ApiError('Fach nicht gefunden.', 'SUBJECT_NOT_FOUND', 404);
+  }
+  const assigned = await prisma.subjectTeacher.findUnique({
+    where: { subjectId_teacherId: { subjectId, teacherId } },
+  });
+  if (!assigned) {
+    throw new ApiError(
+      'Diese Lehrperson ist dem Modul nicht zugewiesen.',
+      'TEACHER_NOT_ON_SUBJECT',
+      400
+    );
   }
 }
 

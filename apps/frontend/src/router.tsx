@@ -65,7 +65,7 @@ export const router = createBrowserRouter([
       { path: 'classes', element: <ProtectedRoute requiredRole={leaderOnly}><ClassesPage /></ProtectedRoute> },
       { path: 'subjects', element: <SubjectsPage /> },
       { path: 'timetable', element: <ProtectedRoute requiredRole={leaderOnly}><TimetablePage /></ProtectedRoute> },
-      { path: 'timetable/print', element: <TimetablePrintPage /> },
+      { path: 'timetable/print', element: <ProtectedRoute requiredRole={leaderOnly}><TimetablePrintPage /></ProtectedRoute> },
       { path: 'zeugnis', element: <ZeugnisPrintPage /> },
       { path: 'absences', element: <AbsencesPage /> },
       { path: 'absences/excuse', element: <ProtectedRoute requiredRole={leaderOnly}><AbsenceExcusePage /></ProtectedRoute> },
@@ -73,7 +73,13 @@ export const router = createBrowserRouter([
       { path: 'users', element: <ProtectedRoute requiredRole={leaderOnly}><UsersPage /></ProtectedRoute> },
       { path: 'exports', element: <ProtectedRoute requiredRole={leaderOnly}><ExportsPage /></ProtectedRoute> },
       { path: 'profile', element: <ProfilePage /> },
-      { path: '403', element: <div className="p-8 text-center"><h1 className="text-2xl font-bold text-red-600">Kein Zugriff</h1><p>Du hast keine Berechtigung für diese Seite.</p></div> },
+      { path: '403', element: (
+        <div className="mx-auto max-w-md py-16 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-red">Kein Zugriff</p>
+          <h1 className="page-title mt-2">Diese Seite ist für deine Rolle nicht frei.</h1>
+          <p className="page-desc">Wenn du denkst, das ist ein Fehler, wende dich an die Abteilungsleitung.</p>
+        </div>
+      ) },
     ],
   },
 

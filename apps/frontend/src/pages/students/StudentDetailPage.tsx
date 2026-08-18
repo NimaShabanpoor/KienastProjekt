@@ -150,10 +150,10 @@ export default function StudentDetailPage() {
     );
   }
 
-  if (!student) return <div className="p-6">Schüler nicht gefunden.</div>;
+  if (!student) return <div>Schüler nicht gefunden.</div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl">
       <Link
         to="/students"
         className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-brand-red mb-6"

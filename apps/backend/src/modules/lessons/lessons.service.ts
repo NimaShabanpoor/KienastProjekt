@@ -9,7 +9,9 @@ import { getHomeroomClassIds } from '../../utils/teacherAccess';
 import { materializeLessonsForRange } from '../timetable/timetable.service';
 
 interface CreateLessonInput {
+  classId: string;
   subjectId: string;
+  teacherId: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -37,7 +39,7 @@ function minutesToTime(total: number): string {
 async function checkLessonConflicts(input: CreateLessonInput): Promise<void> {
   const subject = await prisma.subject.findUnique({
     where: { id: input.subjectId },
-    select: { teacherId: true, class: { select: { name: true } } },
+    select: { id: true },
   });
 
   if (!subject) {
@@ -46,12 +48,11 @@ async function checkLessonConflicts(input: CreateLessonInput): Promise<void> {
 
   const lessonDate = new Date(input.date);
 
-  // 1. Lehrpersonen-Konflikt prüfen
   const teacherConflict = await prisma.lesson.findFirst({
     where: {
       isCancelled: false,
       date: lessonDate,
-      subject: { teacherId: subject.teacherId },
+      teacherId: input.teacherId,
       ...(input.excludeLessonId && { NOT: { id: input.excludeLessonId } }),
       AND: [
         { startTime: { lt: input.endTime } },
@@ -124,8 +125,8 @@ export async function listLessons(params: {
 
   const where = {
     ...(subjectId && { subjectId }),
-    ...(classId && { subject: { classId } }),
-    ...(allowedClassIds && { subject: { classId: { in: allowedClassIds } } }),
+    ...(classId && { classId }),
+    ...(allowedClassIds && { classId: { in: allowedClassIds } }),
     ...(dateFrom && { date: { gte: new Date(dateFrom) } }),
     ...(dateTo && { date: { lte: new Date(dateTo) } }),
     ...(isCancelled !== undefined && { isCancelled }),
@@ -135,10 +136,11 @@ export async function listLessons(params: {
     prisma.lesson.findMany({
       where, skip, take: limit,
       include: {
+        class: { select: { id: true, name: true } },
+        teacher: { select: { id: true, firstName: true, lastName: true } },
         subject: {
           include: {
-            teacher: { select: { id: true, firstName: true, lastName: true } },
-            class: { select: { id: true, name: true } },
+            teachers: { include: { teacher: { select: { id: true, firstName: true, lastName: true } } } },
           },
         },
       },
@@ -155,8 +157,12 @@ export async function getLessonById(id: string) {
     where: { id },
     include: {
       subject: {
-        include: { teacher: { select: { id: true, firstName: true, lastName: true } }, class: true },
+        include: {
+          teachers: { include: { teacher: { select: { id: true, firstName: true, lastName: true } } } },
+        },
       },
+      class: { select: { id: true, name: true } },
+      teacher: { select: { id: true, firstName: true, lastName: true } },
     },
   });
   if (!lesson) throw new ApiError('Lektion nicht gefunden.', 'LESSON_NOT_FOUND', 404);
@@ -200,7 +206,9 @@ export async function createLesson(input: CreateLessonInput) {
   for (const slot of slots) {
     const lesson = await prisma.lesson.create({
       data: {
+        classId: input.classId,
         subjectId: input.subjectId,
+        teacherId: input.teacherId,
         date: new Date(input.date),
         startTime: slot.startTime,
         endTime: slot.endTime,
@@ -210,9 +218,10 @@ export async function createLesson(input: CreateLessonInput) {
       include: {
         subject: {
           include: {
-            class: { select: { id: true, name: true } },
+            teachers: { include: { teacher: { select: { id: true, firstName: true, lastName: true } } } },
           },
         },
+        class: { select: { id: true, name: true } },
       },
     });
     created.push(lesson);
@@ -244,7 +253,9 @@ export async function updateLesson(id: string, input: Partial<CreateLessonInput>
     }
 
     await checkLessonConflicts({
+      classId: input.classId ?? existing.classId,
       subjectId: input.subjectId ?? existing.subjectId,
+      teacherId: input.teacherId ?? existing.teacherId,
       date: input.date ?? existing.date.toISOString().split('T')[0]!,
       startTime: effectiveStart,
       endTime: effectiveEnd,
@@ -258,7 +269,9 @@ export async function updateLesson(id: string, input: Partial<CreateLessonInput>
     where: { id },
     data: {
       // Nur bekannte Felder aktualisieren (kein Mass-Assignment)
+      ...(input.classId !== undefined && { classId: input.classId }),
       ...(input.subjectId !== undefined && { subjectId: input.subjectId }),
+      ...(input.teacherId !== undefined && { teacherId: input.teacherId }),
       ...(input.date !== undefined && { date: new Date(input.date) }),
       ...(input.startTime !== undefined && { startTime: input.startTime }),
       ...(input.endTime !== undefined && { endTime: input.endTime }),
@@ -277,7 +290,7 @@ export async function cancelLesson(
   const lesson = await getLessonById(id);
 
   // Lehrperson darf nur eigene Lektionen absagen
-  if (requestingUserRole === Role.LEHRPERSON && lesson.subject.teacher.id !== requestingUserId) {
+  if (requestingUserRole === Role.LEHRPERSON && lesson.teacherId !== requestingUserId) {
     throw new ApiError('Keine Berechtigung für diese Lektion.', 'FORBIDDEN', 403);
   }
 

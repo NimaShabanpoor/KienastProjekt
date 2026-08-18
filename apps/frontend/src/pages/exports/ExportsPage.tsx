@@ -75,10 +75,10 @@ export default function ExportsPage() {
   };
 
   return (
-    <div className="p-6">
+    <div>
       <div className="flex items-center gap-3 mb-6">
         <Download className="w-6 h-6 text-brand-red" />
-        <h1 className="text-2xl font-bold text-neutral-900">Statistiken & Exporte</h1>
+        <h1 className="page-title">Statistiken & Exporte</h1>
       </div>
 
       {stats && (

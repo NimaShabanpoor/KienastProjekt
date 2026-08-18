@@ -181,11 +181,11 @@ export async function getStudentGrades(
   // Lehrperson sieht nur Noten der eigenen Fächer; Abteilungsleitung sieht alle.
   let subjectFilter: { subjectId: { in: string[] } } | undefined;
   if (requestingUserRole === Role.LEHRPERSON) {
-    const subjects = await prisma.subject.findMany({
-      where: { teacherId: requestingUserId, isActive: true },
-      select: { id: true },
+    const subjects = await prisma.subjectTeacher.findMany({
+      where: { teacherId: requestingUserId },
+      select: { subjectId: true },
     });
-    subjectFilter = { subjectId: { in: subjects.map((s) => s.id) } };
+    subjectFilter = { subjectId: { in: subjects.map((s) => s.subjectId) } };
   }
 
   return prisma.grade.findMany({

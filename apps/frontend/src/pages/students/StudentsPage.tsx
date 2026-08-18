@@ -83,13 +83,13 @@ export default function StudentsPage() {
   });
 
   return (
-    <div className="p-6">
+    <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">
+          <h1 className="page-title">
             {isTeacher ? 'Schülerliste meiner Klasse' : 'Schülerinnen & Schüler'}
           </h1>
-          <p className="text-neutral-500 mt-1">{data?.length ?? 0} Schüler gefunden</p>
+          <p className="page-desc">{data?.length ?? 0} Schüler gefunden</p>
         </div>
         {canManageStudents && (
           <button

@@ -14,7 +14,7 @@ export default function Toaster() {
   const { toasts, dismiss } = useToastStore();
 
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-3">
+    <div className="pointer-events-none fixed right-4 top-20 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-3 print:hidden">
       {toasts.map((t) => {
         const cfg = toneConfig[t.tone];
         const Icon = cfg.icon;
@@ -22,7 +22,7 @@ export default function Toaster() {
           <div
             key={t.id}
             role="status"
-            className={`pointer-events-auto flex items-start gap-3 rounded-2xl border ${cfg.ring} bg-white/95 p-4 shadow-soft backdrop-blur animate-in slide-in-from-top-2`}
+            className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${cfg.ring} bg-white p-4 shadow-soft`}
           >
             <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${cfg.iconColor}`} />
             <p className={`flex-1 text-sm font-medium ${cfg.text}`}>{t.message}</p>

@@ -167,22 +167,20 @@ export const gradesApi = {
 // ---------------- Fächer / Module ----------------
 export interface SubjectInput {
   name: string;
-  classId: string;
-  teacherId: string;
+  color?: string;
+  teacherIds: string[];
 }
 
-// Fach/Modul inkl. Klasse, Lehrperson und Zählern (Backend-Antwort der Liste)
 export type SubjectListItem = Subject & {
-  class?: { id: string; name: string; schoolYear: string; semester: number };
-  teacher?: { id: string; firstName: string; lastName: string };
+  teachers?: { id: string; firstName: string; lastName: string }[];
   _count?: { lessons: number; grades: number; gradeCategories: number };
 };
 
 export const subjectsApi = {
-  list: (params?: { classId?: string; teacherId?: string; isActive?: boolean }) =>
+  list: (params?: { teacherId?: string; isActive?: boolean }) =>
     unwrap<SubjectListItem[]>(apiClient.get(`/api/v1/subjects${qs(params)}`)),
   create: (body: SubjectInput) => unwrap<Subject>(apiClient.post('/api/v1/subjects', body)),
-  update: (id: string, body: Partial<{ name: string; teacherId: string; isActive: boolean }>) =>
+  update: (id: string, body: Partial<{ name: string; color: string; teacherIds: string[]; isActive: boolean }>) =>
     unwrap<Subject>(apiClient.put(`/api/v1/subjects/${id}`, body)),
   deactivate: (id: string) =>
     unwrap<{ id: string; isActive: boolean }>(apiClient.patch(`/api/v1/subjects/${id}/deactivate`)),

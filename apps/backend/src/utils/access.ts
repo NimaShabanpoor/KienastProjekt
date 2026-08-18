@@ -1,52 +1,51 @@
 // Zugriffskontrolle auf Objektebene (Object-Level Authorization)
-// Eine LEHRPERSON darf nur auf Daten der von ihr unterrichteten Klassen/Fächer
-// zugreifen. ABTEILUNGSLEITUNG hat uneingeschränkten Zugriff.
-// nDSG: Zugriff auf Personendaten Minderjähriger strikt auf das Notwendige begrenzen.
 
 import { Role } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ApiError } from '../middleware/errorHandler.middleware';
 
 /**
- * Klassen-IDs, auf die eine Lehrperson Zugriff hat:
- * Klassen, in denen sie ein aktives Fach unterrichtet, PLUS Klassen,
- * denen sie als Klassenlehrer (homeroomTeacher) zugewiesen ist.
+ * Klassen-IDs einer Lehrperson: Stundenplan-Slots + Klassenlehrer.
  */
 export async function getTeacherClassIds(teacherId: string): Promise<string[]> {
-  const [subjects, homeroomClasses] = await Promise.all([
-    prisma.subject.findMany({
-      where: { teacherId, isActive: true },
+  const [slots, homeroomClasses, lessons] = await Promise.all([
+    prisma.timetableSlot.findMany({
+      where: { teacherId },
       select: { classId: true },
+      distinct: ['classId'],
     }),
     prisma.class.findMany({
       where: { homeroomTeacherId: teacherId },
       select: { id: true },
     }),
+    prisma.lesson.findMany({
+      where: { teacherId },
+      select: { classId: true },
+      distinct: ['classId'],
+    }),
   ]);
   return [
-    ...new Set([...subjects.map((s) => s.classId), ...homeroomClasses.map((c) => c.id)]),
+    ...new Set([
+      ...slots.map((s) => s.classId),
+      ...homeroomClasses.map((c) => c.id),
+      ...lessons.map((l) => l.classId),
+    ]),
   ];
 }
 
 /** Fach-IDs, die eine Lehrperson unterrichtet. */
 export async function getTeacherSubjectIds(teacherId: string): Promise<string[]> {
-  const subjects = await prisma.subject.findMany({
-    where: { teacherId, isActive: true },
-    select: { id: true },
+  const rows = await prisma.subjectTeacher.findMany({
+    where: { teacherId },
+    select: { subjectId: true },
   });
-  return subjects.map((s) => s.id);
+  return rows.map((r) => r.subjectId);
 }
 
-/** True, wenn die Rolle uneingeschränkten Zugriff hat. */
 export function isPrivileged(role: Role): boolean {
   return role === Role.ABTEILUNGSLEITUNG;
 }
 
-/**
- * Stellt sicher, dass der Benutzer auf den Schüler zugreifen darf.
- * Wirft 404, wenn der Schüler nicht existiert, und 403, wenn eine Lehrperson
- * auf einen Schüler ausserhalb ihrer Klassen zugreift.
- */
 export async function assertStudentAccessible(
   studentId: string,
   userId: string,
@@ -65,10 +64,6 @@ export async function assertStudentAccessible(
   }
 }
 
-/**
- * Stellt sicher, dass der Benutzer auf die Klasse zugreifen darf.
- * Wirft 403, wenn eine Lehrperson auf eine nicht von ihr unterrichtete Klasse zugreift.
- */
 export async function assertClassAccessible(
   classId: string,
   userId: string,
@@ -81,11 +76,6 @@ export async function assertClassAccessible(
   }
 }
 
-/**
- * Stellt sicher, dass der Benutzer auf das Fach zugreifen darf.
- * Wirft 404, wenn das Fach nicht existiert, und 403, wenn eine Lehrperson
- * auf ein fremdes Fach zugreift.
- */
 export async function assertSubjectAccessible(
   subjectId: string,
   userId: string,
@@ -93,11 +83,14 @@ export async function assertSubjectAccessible(
 ): Promise<void> {
   const subject = await prisma.subject.findUnique({
     where: { id: subjectId },
-    select: { teacherId: true },
+    select: { id: true },
   });
   if (!subject) throw new ApiError('Fach nicht gefunden.', 'SUBJECT_NOT_FOUND', 404);
   if (isPrivileged(role)) return;
-  if (subject.teacherId !== userId) {
+  const assigned = await prisma.subjectTeacher.findUnique({
+    where: { subjectId_teacherId: { subjectId, teacherId: userId } },
+  });
+  if (!assigned) {
     throw new ApiError('Keine Berechtigung für dieses Fach.', 'FORBIDDEN', 403);
   }
 }

@@ -1,12 +1,12 @@
 // Login-Seite
-// Formular für E-Mail + Passwort, IT Bénédict Branding
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import axios from 'axios';
 import { useLogin } from '../../hooks/useAuth';
-import { Loader2, LogIn } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import AuthLayout from '../../components/auth/AuthLayout';
 
 const loginSchema = z.object({
   email: z.string().email('Ungültige E-Mail-Adresse'),
@@ -23,7 +23,7 @@ function getLoginErrorMessage(error: unknown): string {
     const apiError = error.response?.data as { error?: string } | undefined;
     if (apiError?.error) return apiError.error;
   }
-  return 'Ungültige Anmeldedaten. Bitte überprüfe E-Mail und Passwort.';
+  return 'E-Mail oder Passwort ist ungültig.';
 }
 
 export default function LoginPage() {
@@ -37,107 +37,58 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
-  const onSubmit = (data: LoginFormData) => {
-    loginMutation.mutate(data);
-  };
-
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-red rounded-2xl mb-4">
-            <LogIn className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-neutral-900">SchulAdmin</h1>
-          <p className="text-neutral-500 mt-1">IT Bénédict Zürich</p>
+    <AuthLayout title="Anmelden" subtitle="Mit deinem SchulAdmin-Konto fortfahren.">
+      <form onSubmit={(e) => void handleSubmit((data) => loginMutation.mutate(data))(e)} className="space-y-5">
+        <div>
+          <label htmlFor="email" className="mb-1.5 block text-[13px] font-medium text-neutral-700">
+            E-Mail
+          </label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            className="input-modern h-11"
+            {...register('email')}
+          />
+          {errors.email && <p className="mt-1.5 text-[13px] text-error">{errors.email.message}</p>}
         </div>
 
-        {/* Login-Formular */}
-        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-8">
-          <h2 className="text-xl font-semibold text-neutral-900 mb-6">Anmelden</h2>
-
-          <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-4">
-            {/* E-Mail */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-neutral-700 mb-1.5"
-              >
-                E-Mail-Adresse
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                className="w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
-                {...register('email')}
-              />
-              {errors.email && (
-                <p className="text-error text-sm mt-1">{errors.email.message}</p>
-              )}
-            </div>
-
-            {/* Passwort */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-neutral-700 mb-1.5"
-              >
-                Passwort
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                className="w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
-                {...register('password')}
-              />
-              {errors.password && (
-                <p className="text-error text-sm mt-1">{errors.password.message}</p>
-              )}
-            </div>
-
-            {/* Fehler-Anzeige */}
-            {loginMutation.isError && (
-              <div className="bg-brand-red-light border border-brand-red rounded-lg p-3">
-                <p className="text-brand-red-dark text-sm">
-                  {getLoginErrorMessage(loginMutation.error)}
-                </p>
-              </div>
-            )}
-
-            {/* Submit-Button */}
-            <button
-              type="submit"
-              disabled={loginMutation.isPending}
-              className="w-full flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-red-dark text-white font-medium py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loginMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Anmelden...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  Anmelden
-                </>
-              )}
-            </button>
-          </form>
+        <div>
+          <label htmlFor="password" className="mb-1.5 block text-[13px] font-medium text-neutral-700">
+            Passwort
+          </label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            className="input-modern h-11"
+            {...register('password')}
+          />
+          {errors.password && <p className="mt-1.5 text-[13px] text-error">{errors.password.message}</p>}
         </div>
 
-        {/* Datenschutz-Hinweis */}
-        {import.meta.env.DEV && (
-          <p className="text-center text-xs text-neutral-500 mt-4">
-            Dev-Login: admin@itbenedickt.ch / Schuladmin1234!
-          </p>
+        {loginMutation.isError && (
+          <p className="text-[13px] leading-5 text-error">{getLoginErrorMessage(loginMutation.error)}</p>
         )}
-        <p className="text-center text-xs text-neutral-400 mt-2">
-          Dieses System verarbeitet personenbezogene Daten gemäss nDSG.
+
+        <button type="submit" disabled={loginMutation.isPending} className="btn-primary h-11 w-full">
+          {loginMutation.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Anmelden…
+            </>
+          ) : (
+            'Anmelden'
+          )}
+        </button>
+      </form>
+
+      {import.meta.env.DEV && (
+        <p className="mt-8 text-[11px] text-neutral-400">
+          Entwicklung: admin@itbenedickt.ch
         </p>
-      </div>
-    </div>
+      )}
+    </AuthLayout>
   );
 }

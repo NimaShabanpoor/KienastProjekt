@@ -29,7 +29,7 @@ export interface Class {
   createdAt: string;
   updatedAt: string;
   homeroomTeacher?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
-  _count?: { students: number; subjects: number };
+  _count?: { students: number };
 }
 
 // Schüler
@@ -48,23 +48,23 @@ export interface Student {
   class?: Class;
 }
 
-// Fach
+// Fach / Modul (schulweit)
 export interface Subject {
   id: string;
   name: string;
-  classId: string;
-  teacherId: string;
+  color: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  class?: Class;
-  teacher?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
+  teachers?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>[];
 }
 
 // Lektion
 export interface Lesson {
   id: string;
+  classId: string;
   subjectId: string;
+  teacherId: string;
   date: string; // ISO-Datum YYYY-MM-DD
   startTime: string; // HH:mm
   endTime: string; // HH:mm
@@ -74,6 +74,8 @@ export interface Lesson {
   cancelReason: string | null;
   createdAt: string;
   updatedAt: string;
+  class?: Pick<Class, 'id' | 'name'>;
+  teacher?: Pick<User, 'id' | 'firstName' | 'lastName'>;
   subject?: Subject;
 }
 

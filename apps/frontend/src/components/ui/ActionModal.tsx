@@ -22,15 +22,15 @@ export default function ActionModal({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/70 bg-white p-6 shadow-2xl focus:outline-none">
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-neutral-950/40" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-neutral-200 bg-white p-6 shadow-xl focus:outline-none">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="text-xl font-semibold text-slate-950">
+              <Dialog.Title className="text-lg font-semibold text-neutral-900">
                 {title}
               </Dialog.Title>
               {description ? (
-                <Dialog.Description className="mt-2 text-sm text-slate-500">
+                <Dialog.Description className="mt-1.5 text-sm text-neutral-500">
                   {description}
                 </Dialog.Description>
               ) : null}
@@ -38,7 +38,7 @@ export default function ActionModal({
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 transition hover:bg-neutral-50 hover:text-neutral-900"
               >
                 <X className="h-4 w-4" />
               </button>

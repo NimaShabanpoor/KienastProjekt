@@ -64,13 +64,13 @@ export default function UsersPage() {
   })();
 
   return (
-    <div className="p-6">
+    <div>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <UserCog className="w-6 h-6 text-brand-red" />
           <div>
-            <h1 className="text-2xl font-bold text-neutral-900">Benutzer</h1>
-            <p className="text-sm text-neutral-500 mt-0.5">
+            <h1 className="page-title">Benutzer</h1>
+            <p className="page-desc">
               Deaktivieren sperrt nur den Login – der Benutzer bleibt erhalten und kann wieder aktiviert werden.
             </p>
           </div>

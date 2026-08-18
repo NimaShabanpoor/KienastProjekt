@@ -1,10 +1,9 @@
-// Fächer-/Module-Verwaltung (z. B. "Modul 120")
-// Lesen: alle; Anlegen/Bearbeiten/Deaktivieren: nur Abteilungsleitung.
+// Fächer-/Module-Verwaltung – schulweit, mehrere Lehrpersonen, Farbe
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BookMarked, Layers, PencilLine, Plus, Power, PowerOff } from 'lucide-react';
-import { subjectsApi, classesApi, usersApi, apiErrorMessage } from '../../api/endpoints';
+import { Layers, PencilLine, Plus, Power, PowerOff } from 'lucide-react';
+import { subjectsApi, usersApi, apiErrorMessage } from '../../api/endpoints';
 import type { SubjectListItem, SubjectInput } from '../../api/endpoints';
 import { usePermissions } from '../../hooks/usePermissions';
 import { toast } from '../../store/toastStore';
@@ -14,24 +13,33 @@ import ActionModal from '../../components/ui/ActionModal';
 
 type EditState = { mode: 'create' } | { mode: 'edit'; subject: SubjectListItem } | null;
 
-const emptyForm: SubjectInput = { name: '', classId: '', teacherId: '' };
+const COLORS = [
+  '#2563EB',
+  '#0EA5E9',
+  '#10B981',
+  '#F59E0B',
+  '#EF4444',
+  '#8B5CF6',
+  '#EC4899',
+  '#14B8A6',
+  '#D97706',
+  '#64748B',
+  '#C8102E',
+];
+
+const emptyForm: SubjectInput = { name: '', color: COLORS[0], teacherIds: [] };
 
 export default function SubjectsPage() {
   const { isAdmin } = usePermissions();
   const queryClient = useQueryClient();
-
-  const [classFilter, setClassFilter] = useState('');
   const [editState, setEditState] = useState<EditState>(null);
   const [form, setForm] = useState<SubjectInput>(emptyForm);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['subjects', classFilter],
-    queryFn: () => subjectsApi.list({ classId: classFilter || undefined }),
+    queryKey: ['subjects'],
+    queryFn: () => subjectsApi.list(),
   });
 
-  const { data: classes } = useQuery({ queryKey: ['classes'], queryFn: classesApi.list });
-
-  // Lehrpersonen nur laden, wenn Verwaltung möglich (Users-Endpunkt ist admin-only)
   const { data: users } = useQuery({
     queryKey: ['users'],
     queryFn: () => usersApi.list(),
@@ -43,7 +51,11 @@ export default function SubjectsPage() {
   const saveMutation = useMutation({
     mutationFn: (payload: { id?: string; body: SubjectInput }) =>
       payload.id
-        ? subjectsApi.update(payload.id, { name: payload.body.name, teacherId: payload.body.teacherId })
+        ? subjectsApi.update(payload.id, {
+            name: payload.body.name,
+            color: payload.body.color,
+            teacherIds: payload.body.teacherIds,
+          })
         : subjectsApi.create(payload.body),
     onSuccess: (_res, payload) => {
       invalidate();
@@ -64,37 +76,50 @@ export default function SubjectsPage() {
   });
 
   const openCreate = () => {
-    setForm({ name: '', classId: classFilter || classes?.[0]?.id || '', teacherId: '' });
+    setForm({ name: '', color: COLORS[(data?.length ?? 0) % COLORS.length], teacherIds: [] });
     setEditState({ mode: 'create' });
   };
 
   const openEdit = (subject: SubjectListItem) => {
-    setForm({ name: subject.name, classId: subject.classId, teacherId: subject.teacherId });
+    setForm({
+      name: subject.name,
+      color: subject.color || COLORS[0],
+      teacherIds: (subject.teachers ?? []).map((t) => t.id),
+    });
     setEditState({ mode: 'edit', subject });
   };
 
   const isEdit = editState?.mode === 'edit';
-  const canSubmit = form.name.trim() && form.classId && form.teacherId;
+  const canSubmit = form.name.trim() && form.teacherIds.length > 0;
 
   const submit = () => {
     if (!canSubmit) {
-      toast.error('Bitte Modulname, Klasse und Lehrperson wählen.');
+      toast.error('Bitte Modulname und mindestens eine Lehrperson wählen.');
       return;
     }
     saveMutation.mutate({
       id: isEdit ? editState.subject.id : undefined,
-      body: { name: form.name.trim(), classId: form.classId, teacherId: form.teacherId },
+      body: { name: form.name.trim(), color: form.color, teacherIds: form.teacherIds },
     });
   };
 
   const teacherOptions = useMemo(() => (users ?? []).filter((u) => u.isActive), [users]);
+
+  const toggleTeacher = (id: string) => {
+    setForm((p) => ({
+      ...p,
+      teacherIds: p.teacherIds.includes(id)
+        ? p.teacherIds.filter((x) => x !== id)
+        : [...p.teacherIds, id],
+    }));
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Unterricht"
         title="Fächer & Module"
-        description={`${data?.length ?? 0} Module. Erfasse Module (z. B. „Modul 120"), weise sie einer Klasse und einer Lehrperson zu.`}
+        description={`${data?.length ?? 0} Module für alle Klassen. Weise mehreren Lehrpersonen dasselbe Modul zu.`}
         actions={
           isAdmin ? (
             <button type="button" className="btn-primary" onClick={openCreate}>
@@ -104,22 +129,6 @@ export default function SubjectsPage() {
           ) : null
         }
       />
-
-      <div className="surface-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-        <label className="text-sm font-medium text-slate-600">Klasse filtern</label>
-        <select
-          className="input-modern sm:max-w-xs"
-          value={classFilter}
-          onChange={(e) => setClassFilter(e.target.value)}
-        >
-          <option value="">Alle Klassen</option>
-          {classes?.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name} ({c.schoolYear})
-            </option>
-          ))}
-        </select>
-      </div>
 
       <div className="surface-card overflow-hidden">
         {isLoading && (
@@ -135,7 +144,7 @@ export default function SubjectsPage() {
             <EmptyState
               icon={<Layers className="h-6 w-6" />}
               title="Noch keine Module vorhanden"
-              description={'Lege dein erstes Modul an (z. B. "Modul 120") und weise es einer Klasse und einer Lehrperson zu.'}
+              description="Lege ein Modul an (z. B. Modul 122) und weise eine oder mehrere Lehrpersonen zu."
               action={
                 isAdmin ? (
                   <button type="button" className="btn-primary" onClick={openCreate}>
@@ -153,13 +162,22 @@ export default function SubjectsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/80">
-                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Modul / Fach</th>
-                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Klasse</th>
-                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Lehrperson</th>
-                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Umfang</th>
-                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Modul / Fach
+                  </th>
+                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Lehrpersonen
+                  </th>
+                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Umfang
+                  </th>
+                  <th className="px-5 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Status
+                  </th>
                   {isAdmin && (
-                    <th className="px-5 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Aktionen</th>
+                    <th className="px-5 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
+                      Aktionen
+                    </th>
                   )}
                 </tr>
               </thead>
@@ -168,15 +186,19 @@ export default function SubjectsPage() {
                   <tr key={subject.id} className="transition hover:bg-slate-50">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="rounded-xl bg-rose-50 p-2 text-brand-red">
-                          <BookMarked className="h-4 w-4" />
-                        </div>
+                        <span
+                          className="h-8 w-8 shrink-0 rounded-lg border border-black/5"
+                          style={{ backgroundColor: subject.color }}
+                        />
                         <span className="font-medium text-slate-900">{subject.name}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-sm text-slate-600">{subject.class?.name ?? '–'}</td>
                     <td className="px-5 py-4 text-sm text-slate-600">
-                      {subject.teacher ? `${subject.teacher.firstName} ${subject.teacher.lastName}` : '–'}
+                      {(subject.teachers ?? []).length === 0
+                        ? '–'
+                        : (subject.teachers ?? [])
+                            .map((t) => `${t.firstName} ${t.lastName}`)
+                            .join(', ')}
                     </td>
                     <td className="px-5 py-4 text-xs text-slate-500">
                       {subject._count?.lessons ?? 0} Lekt. · {subject._count?.gradeCategories ?? 0} Kat.
@@ -229,7 +251,7 @@ export default function SubjectsPage() {
         open={editState !== null}
         onOpenChange={(open) => !open && setEditState(null)}
         title={isEdit ? 'Modul bearbeiten' : 'Neues Modul anlegen'}
-        description="Erfasse ein Modul/Fach und weise es einer Klasse und einer Lehrperson zu."
+        description="Module gelten für alle Klassen. Mehrere Lehrpersonen können dasselbe Modul vertreten."
         footer={
           <>
             <button type="button" className="btn-secondary" onClick={() => setEditState(null)}>
@@ -248,43 +270,38 @@ export default function SubjectsPage() {
               className="input-modern"
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="z. B. Modul 120 – ICT-Berufsbildung analysieren"
+              placeholder="z. B. Modul 122"
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Klasse *</label>
-              <select
-                className="input-modern"
-                value={form.classId}
-                onChange={(e) => setForm((p) => ({ ...p, classId: e.target.value }))}
-                disabled={isEdit}
-              >
-                <option value="">— wählen —</option>
-                {classes?.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.schoolYear})
-                  </option>
-                ))}
-              </select>
-              {isEdit && (
-                <p className="mt-1 text-xs text-slate-400">Die Klasse eines bestehenden Moduls ist fix.</p>
-              )}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Farbe</label>
+            <div className="flex flex-wrap gap-2">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, color: c }))}
+                  className={`h-8 w-8 rounded-lg border-2 ${form.color === c ? 'border-neutral-900' : 'border-transparent'}`}
+                  style={{ backgroundColor: c }}
+                  aria-label={c}
+                />
+              ))}
             </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Lehrperson *</label>
-              <select
-                className="input-modern"
-                value={form.teacherId}
-                onChange={(e) => setForm((p) => ({ ...p, teacherId: e.target.value }))}
-              >
-                <option value="">— wählen —</option>
-                {teacherOptions.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.firstName} {u.lastName}
-                  </option>
-                ))}
-              </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Lehrpersonen *</label>
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 p-2">
+              {teacherOptions.map((u) => (
+                <label key={u.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-neutral-50">
+                  <input
+                    type="checkbox"
+                    checked={form.teacherIds.includes(u.id)}
+                    onChange={() => toggleTeacher(u.id)}
+                    className="rounded border-neutral-300"
+                  />
+                  {u.firstName} {u.lastName}
+                </label>
+              ))}
             </div>
           </div>
         </div>

@@ -41,7 +41,7 @@ export default function AbsencesPage() {
   const blocks = useMemo((): LessonBlock[] => {
     const map = new Map<string, LessonBlock>();
     for (const lesson of lessons ?? []) {
-      const classId = lesson.subject?.class?.id ?? 'unknown';
+      const classId = lesson.classId || lesson.class?.id || 'unknown';
       const subjectId = lesson.subjectId;
       const key = `${classId}:${subjectId}`;
       const existing = map.get(key);
@@ -52,7 +52,7 @@ export default function AbsencesPage() {
           key,
           subjectName: lesson.subject?.name ?? 'Fach',
           classId,
-          className: lesson.subject?.class?.name ?? '–',
+          className: lesson.class?.name ?? '–',
           lessons: [lesson],
         });
       }
@@ -135,7 +135,7 @@ export default function AbsencesPage() {
 
   if (!isTeacher) {
     return (
-      <div className="p-6 max-w-4xl mx-auto text-center">
+      <div className="mx-auto max-w-4xl text-center">
         <h1 className="text-2xl font-bold text-neutral-900 mb-2">Absenzen erfassen</h1>
         <p className="text-neutral-500">
           Als Leiter erfasst du keine Anwesenheit. Nutze stattdessen{' '}
@@ -149,9 +149,9 @@ export default function AbsencesPage() {
   }
 
   return (
-    <div className="p-4 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-neutral-900 mb-1">Anwesenheit erfassen</h1>
-      <p className="text-sm text-neutral-500 mb-4">
+    <div className="mx-auto max-w-4xl">
+      <h1 className="page-title">Anwesenheit erfassen</h1>
+      <p className="page-desc mb-4">
         Fach wählen, dann pro Schüler Anwesend / Nicht anwesend und ggf. die Lektionenanzahl.
       </p>
 

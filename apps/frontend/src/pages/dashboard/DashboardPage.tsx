@@ -4,7 +4,18 @@
 import { useAuthStore } from '../../store/authStore';
 import { usePermissions } from '../../hooks/usePermissions';
 import { ROLE_LABELS } from '@schuladmin/shared';
-import { Users, BookOpen, AlertTriangle, BarChart2, CalendarDays, GraduationCap, CheckCircle2, UserCog } from 'lucide-react';
+import {
+  Users,
+  BookOpen,
+  AlertTriangle,
+  BarChart2,
+  CalendarDays,
+  GraduationCap,
+  CheckCircle2,
+  UserCog,
+  ArrowRight,
+  Layers,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface QuickActionCard {
@@ -12,7 +23,6 @@ interface QuickActionCard {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   href: string;
-  color: string;
 }
 
 export default function DashboardPage() {
@@ -25,73 +35,69 @@ export default function DashboardPage() {
       description: 'Schüler als anwesend oder abwesend markieren',
       icon: AlertTriangle,
       href: '/absences',
-      color: 'bg-orange-50 text-orange-600',
     },
     {
       title: 'Noten eintragen',
-      description: 'Testtitel vergeben und Noten der Schüler erfassen',
+      description: 'Tests anlegen und Noten erfassen',
       icon: GraduationCap,
       href: '/grades',
-      color: 'bg-blue-50 text-blue-600',
     },
     {
       title: 'Schülerliste',
-      description: 'Schüler meiner Klasse anzeigen',
+      description: 'Schüler deiner Klasse anzeigen',
       icon: Users,
       href: '/students',
-      color: 'bg-purple-50 text-purple-600',
+    },
+    {
+      title: 'Module',
+      description: 'Zugewiesene Fächer und Module',
+      icon: Layers,
+      href: '/subjects',
     },
   ];
 
   const leaderActions: QuickActionCard[] = [
     {
       title: 'Absenzen entschuldigen',
-      description: 'Unentschuldigte Absenzen bearbeiten',
+      description: 'Offene Absenzen prüfen und bearbeiten',
       icon: CheckCircle2,
       href: '/absences/excuse',
-      color: 'bg-yellow-50 text-yellow-600',
     },
     {
-      title: 'Noten korrigieren',
+      title: 'Noten',
       description: 'Eingetragene Noten prüfen und korrigieren',
       icon: GraduationCap,
       href: '/grades',
-      color: 'bg-blue-50 text-blue-600',
     },
     {
-      title: 'Schüler verwalten',
-      description: 'Schülerinnen und Schüler hinzufügen',
+      title: 'Schüler',
+      description: 'Schülerinnen und Schüler verwalten',
       icon: Users,
       href: '/students',
-      color: 'bg-purple-50 text-purple-600',
     },
     {
-      title: 'Klassen verwalten',
-      description: 'Klassen anlegen und Lehrer zuweisen',
+      title: 'Klassen',
+      description: 'Klassen anlegen und Lehrpersonen zuweisen',
       icon: BookOpen,
       href: '/classes',
-      color: 'bg-indigo-50 text-indigo-600',
     },
     {
       title: 'Stundenplan',
-      description: 'Lektionen und Stundenplan pflegen',
+      description: 'Lektionen und Wochenplan pflegen',
       icon: CalendarDays,
       href: '/timetable',
-      color: 'bg-green-50 text-green-600',
     },
     {
-      title: 'Benutzer verwalten',
-      description: 'Lehrer und Leiter anlegen',
+      title: 'Benutzer',
+      description: 'Lehrpersonen und Leitung anlegen',
       icon: UserCog,
       href: '/users',
-      color: 'bg-rose-50 text-rose-600',
     },
     {
-      title: 'Statistiken & Export',
+      title: 'Exporte',
       description: 'Berichte und Absenzen-Statistiken',
       icon: BarChart2,
       href: '/exports',
-      color: 'bg-teal-50 text-teal-600',
     },
   ];
 
@@ -99,30 +105,36 @@ export default function DashboardPage() {
   const roleLabel = user?.role ? ROLE_LABELS[user.role] : '';
 
   return (
-    <div className="p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-neutral-900">
-          Guten Tag, {user?.firstName} {user?.lastName}
+    <div className="mx-auto max-w-5xl space-y-8">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-red">Übersicht</p>
+        <h1 className="page-title mt-1">
+          Guten Tag, {user?.firstName}
         </h1>
-        <p className="text-neutral-500 mt-1">
-          {roleLabel} – IT Bénédict Zürich
+        <p className="page-desc">
+          {roleLabel} · IT Bénédict Zürich
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {actions.map((action) => (
           <Link
             key={action.href}
             to={action.href}
-            className="block bg-white rounded-xl border border-neutral-200 p-5 hover:shadow-md hover:border-brand-red transition-all group"
+            className="group flex items-start gap-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:border-brand-red/30 hover:shadow-soft"
           >
-            <div className={`inline-flex p-3 rounded-xl mb-3 ${action.color}`}>
-              <action.icon className="w-5 h-5" />
-            </div>
-            <h3 className="font-semibold text-neutral-900 group-hover:text-brand-red transition-colors">
-              {action.title}
-            </h3>
-            <p className="text-sm text-neutral-500 mt-1">{action.description}</p>
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-red-light text-brand-red">
+              <action.icon className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-neutral-900 group-hover:text-brand-red">
+                  {action.title}
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-neutral-300 transition group-hover:translate-x-0.5 group-hover:text-brand-red" />
+              </span>
+              <span className="mt-1 block text-sm text-neutral-500">{action.description}</span>
+            </span>
           </Link>
         ))}
       </div>

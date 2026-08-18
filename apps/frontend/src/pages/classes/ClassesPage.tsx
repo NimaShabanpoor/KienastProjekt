@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import type { Class, User, Subject } from '@schuladmin/shared';
+import type { Class, User } from '@schuladmin/shared';
 import { Role } from '@schuladmin/shared';
 import { Plus, BookOpen } from 'lucide-react';
 
@@ -14,9 +14,6 @@ export default function ClassesPage() {
   const [semester, setSemester] = useState(1);
   const [schoolYear, setSchoolYear] = useState('2024/25');
   const [homeroomTeacherId, setHomeroomTeacherId] = useState('');
-  const [subjectClassId, setSubjectClassId] = useState('');
-  const [subjectName, setSubjectName] = useState('');
-  const [subjectTeacherId, setSubjectTeacherId] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['classes'],
@@ -60,35 +57,12 @@ export default function ClassesPage() {
     },
   });
 
-  const { data: classSubjects } = useQuery({
-    queryKey: ['subjects', subjectClassId],
-    queryFn: async () => {
-      const { data } = await apiClient.get<{ data: Subject[] }>(`/api/v1/classes/${subjectClassId}/subjects`);
-      return data.data;
-    },
-    enabled: !!subjectClassId,
-  });
-
-  const createSubjectMutation = useMutation({
-    mutationFn: async () => {
-      await apiClient.post(`/api/v1/classes/${subjectClassId}/subjects`, {
-        name: subjectName,
-        teacherId: subjectTeacherId,
-      });
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['subjects', subjectClassId] });
-      setSubjectName('');
-      setSubjectTeacherId('');
-    },
-  });
-
   return (
-    <div className="p-6">
+    <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Klassen</h1>
-          <p className="text-neutral-500 mt-1">{data?.length ?? 0} Klassen</p>
+          <h1 className="page-title">Klassen</h1>
+          <p className="page-desc">{data?.length ?? 0} Klassen</p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -188,39 +162,6 @@ export default function ClassesPage() {
         {!isLoading && !data?.length && (
           <div className="col-span-3 text-center py-12">
             <p className="text-neutral-400">Noch keine Klassen. Neue Klasse hinzufügen →</p>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-8 bg-white rounded-xl border border-neutral-200 p-5">
-        <h2 className="font-semibold text-neutral-900 mb-4">Fächer verwalten</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-          <select value={subjectClassId} onChange={(e) => setSubjectClassId(e.target.value)} className="px-3 py-2 border rounded-lg text-sm">
-            <option value="">Klasse wählen</option>
-            {data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <input value={subjectName} onChange={(e) => setSubjectName(e.target.value)} placeholder="Fachname" className="px-3 py-2 border rounded-lg text-sm" disabled={!subjectClassId} />
-          <select value={subjectTeacherId} onChange={(e) => setSubjectTeacherId(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" disabled={!subjectClassId}>
-            <option value="">Fachlehrer</option>
-            {teachers?.map((t) => <option key={t.id} value={t.id}>{t.lastName}, {t.firstName}</option>)}
-          </select>
-        </div>
-        <button
-          disabled={!subjectClassId || !subjectName || !subjectTeacherId || createSubjectMutation.isPending}
-          onClick={() => createSubjectMutation.mutate()}
-          className="bg-brand-red text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50 mb-4"
-        >
-          Fach hinzufügen
-        </button>
-        {subjectClassId && (
-          <div className="space-y-2">
-            {classSubjects?.length === 0 && <p className="text-sm text-neutral-400">Noch keine Fächer in dieser Klasse.</p>}
-            {classSubjects?.map((s) => (
-              <div key={s.id} className="flex justify-between text-sm py-2 border-b border-neutral-100">
-                <span className="font-medium">{s.name}</span>
-                <span className="text-neutral-500">{s.teacher ? `${s.teacher.lastName}, ${s.teacher.firstName}` : '–'}</span>
-              </div>
-            ))}
           </div>
         )}
       </div>

@@ -74,14 +74,15 @@ model User {
   deletedAt        DateTime? // Soft Delete Timestamp
 
   // Beziehungen
-  subjects         Subject[]         // Zugewiesene Fächer
-  homeroomClasses  Class[]           @relation("ClassHomeroomTeacher")
-  absencesRecorded Absence[]         @relation("AbsenceRecordedBy")
-  gradesCreated    Grade[]           @relation("GradeCreatedBy")
-  gradeCorrections GradeCorrection[] @relation("CorrectionBy")
-  auditLogs        AuditLog[]
-  notifications    Notification[]
-  timetableSlots   TimetableSlot[]   @relation("TimetableSlotTeacher")
+  subjectAssignments SubjectTeacher[]
+  homeroomClasses    Class[]           @relation("ClassHomeroomTeacher")
+  absencesRecorded   Absence[]         @relation("AbsenceRecordedBy")
+  gradesCreated      Grade[]           @relation("GradeCreatedBy")
+  gradeCorrections   GradeCorrection[] @relation("CorrectionBy")
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  lessons            Lesson[]          @relation("LessonTeacher")
+  timetableSlots     TimetableSlot[]   @relation("TimetableSlotTeacher")
   timetableExceptions TimetableException[] @relation("TimetableExceptionTeacher")
 
   @@index([email])
@@ -105,7 +106,7 @@ model Class {
   // Beziehungen
   homeroomTeacher User?     @relation("ClassHomeroomTeacher", fields: [homeroomTeacherId], references: [id])
   students        Student[]
-  subjects        Subject[]
+  lessons         Lesson[]
   timetableSlots  TimetableSlot[]
   timetableExceptions TimetableException[]
 
@@ -143,30 +144,36 @@ model Student {
 }
 
 // ============================================================
-// FÄCHER
-// Einem Fach ist genau eine Lehrperson und eine Klasse zugewiesen
+// FÄCHER / MODULE (schulweit, nicht an eine Klasse gebunden)
+// Mehrere Lehrpersonen können dasselbe Modul unterrichten.
 // ============================================================
 model Subject {
   id        String   @id @default(cuid())
-  name      String
-  classId   String
-  teacherId String
+  name      String   @unique
+  color     String   @default("#C8102E")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Beziehungen
-  class           Class           @relation(fields: [classId], references: [id])
-  teacher         User            @relation(fields: [teacherId], references: [id])
-  lessons         Lesson[]
-  grades          Grade[]
-  gradeCategories GradeCategory[]
-  timetableSlots  TimetableSlot[]
+  teachers            SubjectTeacher[]
+  lessons             Lesson[]
+  grades              Grade[]
+  gradeCategories     GradeCategory[]
+  timetableSlots      TimetableSlot[]
   timetableExceptions TimetableException[]
 
-  @@index([classId])
-  @@index([teacherId])
   @@map("subjects")
+}
+
+model SubjectTeacher {
+  subjectId String
+  teacherId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher   User    @relation(fields: [teacherId], references: [id])
+
+  @@id([subjectId, teacherId])
+  @@index([teacherId])
+  @@map("subject_teachers")
 }
 
 // ============================================================
@@ -175,7 +182,9 @@ model Subject {
 // ============================================================
 model Lesson {
   id           String   @id @default(cuid())
+  classId      String
   subjectId    String
+  teacherId    String
   date         DateTime @db.Date
   startTime    String   // "08:00" (HH:mm)
   endTime      String   // "08:45" (HH:mm)
@@ -186,11 +195,14 @@ model Lesson {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Beziehungen
+  class    Class     @relation(fields: [classId], references: [id])
   subject  Subject   @relation(fields: [subjectId], references: [id])
+  teacher  User      @relation("LessonTeacher", fields: [teacherId], references: [id])
   absences Absence[]
 
+  @@index([classId])
   @@index([subjectId])
+  @@index([teacherId])
   @@index([date])
   @@map("lessons")
 }

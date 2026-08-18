@@ -246,9 +246,9 @@ export default function AbsenceExcusePage() {
   const testCount = data?.filter((a) => a.lesson?.isTest).length ?? 0;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold text-neutral-900 mb-1">Absenzen entschuldigen</h1>
-      <p className="text-neutral-500 mb-4">
+    <div className="mx-auto max-w-3xl">
+      <h1 className="page-title">Absenzen entschuldigen</h1>
+      <p className="page-desc mb-4">
         Nach Klasse sortiert · {totalOpen} offen
         {testCount > 0 && ` · ${testCount} an Test-Tagen (Arztzeugnis erforderlich)`}
       </p>

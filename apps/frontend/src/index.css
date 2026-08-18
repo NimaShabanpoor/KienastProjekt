@@ -5,27 +5,27 @@
 /* CSS-Variablen für shadcn/ui (Light Mode) */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 220 14% 97%;
+    --foreground: 222.2 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222.2 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 222.2 47% 11%;
     /* IT Bénédict Rot als Primärfarbe */
     --primary: 350 85% 42%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
+    --secondary: 220 14% 96%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 215.4 12% 45%;
+    --accent: 350 70% 96%;
+    --accent-foreground: 350 85% 32%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
     --ring: 350 85% 42%;
-    --radius: 0.5rem;
+    --radius: 0.625rem;
   }
 
   /* Dark Mode */
@@ -67,35 +67,42 @@
 @layer components {
   .bg-app-gradient {
     background:
-      radial-gradient(circle at top left, rgba(190, 24, 93, 0.12), transparent 35%),
-      radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 30%),
-      linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(200, 16, 46, 0.08), transparent 55%),
+      #f7f8fa;
   }
 
   .shadow-soft {
     box-shadow:
-      0 10px 30px rgba(15, 23, 42, 0.06),
-      0 2px 8px rgba(15, 23, 42, 0.04);
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 8px 24px rgba(15, 23, 42, 0.04);
   }
 
   .surface-card {
-    @apply rounded-3xl border border-white/70 bg-white/85 shadow-soft backdrop-blur;
+    @apply rounded-xl border border-neutral-200 bg-white shadow-sm;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-red px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-red-dark disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .input-modern {
-    @apply w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-red focus:ring-4 focus:ring-rose-100;
+    @apply w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-brand-red focus:ring-2 focus:ring-brand-red/15;
   }
 
   .stat-card {
-    @apply rounded-3xl border border-white/70 bg-white/85 p-5 shadow-soft backdrop-blur;
+    @apply rounded-xl border border-neutral-200 bg-white p-5 shadow-sm;
+  }
+
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight text-neutral-900;
+  }
+
+  .page-desc {
+    @apply mt-1 text-sm text-neutral-500;
   }
 }
 

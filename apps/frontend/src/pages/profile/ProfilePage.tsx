@@ -45,22 +45,19 @@ export default function ProfilePage() {
     return data?.error ?? 'Passwort konnte nicht geändert werden.';
   })();
 
-  const fieldClass =
-    'w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent';
+  const fieldClass = 'input-modern';
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
+    <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <User className="w-6 h-6 text-brand-red" />
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Profileinstellungen</h1>
-          <p className="text-sm text-neutral-500 mt-0.5">
-            Persönliche Daten, Passwort und Abmeldung
-          </p>
+          <h1 className="page-title">Profileinstellungen</h1>
+          <p className="page-desc">Persönliche Daten, Passwort und Abmeldung</p>
         </div>
       </div>
 
-      <section className="bg-white rounded-xl border border-neutral-200 p-5">
+      <section className="surface-card p-5">
         <h2 className="text-sm font-semibold text-neutral-900 mb-4">Allgemeine Daten</h2>
         <dl className="grid gap-3 sm:grid-cols-2 text-sm">
           <div>
@@ -90,7 +87,7 @@ export default function ProfilePage() {
         </dl>
       </section>
 
-      <section className="bg-white rounded-xl border border-neutral-200 p-5">
+      <section className="surface-card p-5">
         <div className="flex items-center gap-2 mb-4">
           <KeyRound className="w-4 h-4 text-neutral-600" />
           <h2 className="text-sm font-semibold text-neutral-900">Passwort ändern</h2>
@@ -170,7 +167,7 @@ export default function ProfilePage() {
         </form>
       </section>
 
-      <section className="bg-white rounded-xl border border-neutral-200 p-5">
+      <section className="surface-card p-5">
         <h2 className="text-sm font-semibold text-neutral-900 mb-2">Sitzung</h2>
         <p className="text-sm text-neutral-500 mb-4">
           Du wirst abgemeldet und zur Anmeldeseite weitergeleitet.

@@ -46,7 +46,7 @@ export async function listClasses(params: {
         take: limit,
         include: {
           homeroomTeacher: { select: { id: true, firstName: true, lastName: true, email: true } },
-          _count: { select: { students: true, subjects: true } },
+          _count: { select: { students: true } },
         },
         orderBy: [{ schoolYear: 'desc' }, { name: 'asc' }],
       }),
@@ -66,7 +66,7 @@ export async function listClasses(params: {
       where, skip, take: limit,
       include: {
         homeroomTeacher: { select: { id: true, firstName: true, lastName: true, email: true } },
-        _count: { select: { students: true, subjects: true } },
+        _count: { select: { students: true } },
       },
       orderBy: [{ schoolYear: 'desc' }, { name: 'asc' }],
     }),
@@ -82,7 +82,7 @@ export async function getClassById(id: string, requestingUserId: string, request
     where: { id },
     include: {
       homeroomTeacher: { select: { id: true, firstName: true, lastName: true, email: true } },
-      _count: { select: { students: true, subjects: true } },
+      _count: { select: { students: true } },
     },
   });
   if (!cls) throw new ApiError('Klasse nicht gefunden.', 'CLASS_NOT_FOUND', 404);
@@ -149,10 +149,24 @@ export async function getClassStudents(classId: string, requestingUserId: string
 
 export async function getClassSubjects(classId: string, requestingUserId: string, requestingUserRole: Role) {
   await assertClassAccessible(classId, requestingUserId, requestingUserRole);
-  return prisma.subject.findMany({
-    where: { classId, isActive: true },
-    include: { teacher: { select: { id: true, firstName: true, lastName: true } } },
+  const slots = await prisma.timetableSlot.findMany({
+    where: { classId },
+    select: { subjectId: true },
+    distinct: ['subjectId'],
   });
+  const ids = slots.map((s) => s.subjectId);
+  if (ids.length === 0) return [];
+  const rows = await prisma.subject.findMany({
+    where: { id: { in: ids }, isActive: true },
+    include: {
+      teachers: { include: { teacher: { select: { id: true, firstName: true, lastName: true } } } },
+    },
+    orderBy: { name: 'asc' },
+  });
+  return rows.map((s) => ({
+    ...s,
+    teachers: s.teachers.map((t) => t.teacher),
+  }));
 }
 
 export async function getClassTimetable(
@@ -165,43 +179,27 @@ export async function getClassTimetable(
   await assertClassAccessible(classId, requestingUserId, requestingUserRole);
   return prisma.lesson.findMany({
     where: {
-      subject: { classId },
+      classId,
       ...(dateFrom && { date: { gte: new Date(dateFrom) } }),
       ...(dateTo && { date: { lte: new Date(dateTo) } }),
     },
     include: {
-      subject: { include: { teacher: { select: { id: true, firstName: true, lastName: true } } } },
+      class: { select: { id: true, name: true } },
+      teacher: { select: { id: true, firstName: true, lastName: true } },
+      subject: {
+        include: {
+          teachers: { include: { teacher: { select: { id: true, firstName: true, lastName: true } } } },
+        },
+      },
     },
     orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
   });
 }
 
 export async function createSubject(
-  classId: string,
+  _classId: string,
   input: { name: string; teacherId: string }
 ) {
-  const cls = await prisma.class.findUnique({ where: { id: classId }, select: { id: true } });
-  if (!cls) throw new ApiError('Klasse nicht gefunden.', 'CLASS_NOT_FOUND', 404);
-
-  const teacher = await prisma.user.findFirst({
-    where: { id: input.teacherId, role: Role.LEHRPERSON, isActive: true, deletedAt: null },
-  });
-  if (!teacher) {
-    throw new ApiError('Ungültiger Lehrer.', 'INVALID_TEACHER', 400);
-  }
-
-  return prisma.subject.create({
-    data: {
-      name: input.name,
-      classId,
-      teacherId: input.teacherId,
-      gradeCategories: {
-        create: [
-          { name: 'Prüfung', weight: 0.6 },
-          { name: 'Mündlich', weight: 0.4 },
-        ],
-      },
-    },
-    include: { teacher: { select: { id: true, firstName: true, lastName: true } } },
-  });
+  const { createSubject: createGlobalSubject } = await import('../subjects/subjects.service');
+  return createGlobalSubject({ name: input.name, teacherIds: [input.teacherId] });
 }
