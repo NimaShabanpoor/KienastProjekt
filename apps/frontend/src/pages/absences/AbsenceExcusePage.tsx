@@ -1,12 +1,19 @@
-// Absenzen entschuldigen (nur Leiter)
-// Gruppiert nach Klasse; bei Tests: Arztzeugnis erfassen & Scan hochladen
+// Absenzen verwalten (nur Leiter)
+// Erfassen: Leiter kann Schülern direkt Absenzen geben (mit Schüler-Suche).
+// Entschuldigen: gruppiert nach Klasse; bei Tests: Arztzeugnis erfassen & Scan hochladen
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import { AbsenceStatus } from '@schuladmin/shared';
-import type { Absence, Class } from '@schuladmin/shared';
-import { AlertCircle, CheckCircle2, FileText, Upload } from 'lucide-react';
+import type { Absence, Class, Lesson, Student } from '@schuladmin/shared';
+import { AlertCircle, CheckCircle2, FileText, Plus, Search, Upload, X } from 'lucide-react';
+
+// Fehlertext aus einer Axios/API-Antwort ziehen
+function errorText(err: unknown, fallback: string): string {
+  const anyErr = err as { response?: { data?: { error?: string } } };
+  return anyErr?.response?.data?.error ?? fallback;
+}
 
 interface ClassGroup {
   classId: string;
@@ -199,9 +206,241 @@ function AbsenceRow({
   );
 }
 
+// --------------------------------------------------------
+// ABSENZ ERFASSEN (Leiter): Schüler suchen, Lektionen wählen
+// --------------------------------------------------------
+function RecordAbsenceForm({ onCreated }: { onCreated: () => void }) {
+  const today = new Date().toISOString().split('T')[0]!;
+  const [studentSearch, setStudentSearch] = useState('');
+  const [student, setStudent] = useState<Student | null>(null);
+  const [date, setDate] = useState(today);
+  const [deselected, setDeselected] = useState<Set<string>>(new Set());
+  const [note, setNote] = useState('');
+  const [feedback, setFeedback] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const query = studentSearch.trim();
+  const { data: results } = useQuery({
+    queryKey: ['student-search', query],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: Student[] }>(
+        `/api/v1/students?search=${encodeURIComponent(query)}&isActive=true&limit=20`
+      );
+      return data.data;
+    },
+    enabled: query.length >= 2 && !student,
+  });
+
+  const { data: lessons } = useQuery({
+    queryKey: ['lessons-for-absence', student?.classId, date],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: Lesson[] }>(
+        `/api/v1/lessons?classId=${student!.classId}&dateFrom=${date}&dateTo=${date}`
+      );
+      return data.data
+        .filter((l) => !l.isCancelled)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    },
+    enabled: !!student && !!date,
+  });
+
+  const selectedLessonIds = (lessons ?? [])
+    .filter((l) => !deselected.has(l.id))
+    .map((l) => l.id);
+
+  const toggleLesson = (id: string): void => {
+    setDeselected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const reset = (): void => {
+    setStudent(null);
+    setStudentSearch('');
+    setDate(today);
+    setDeselected(new Set());
+    setNote('');
+  };
+
+  const recordMutation = useMutation({
+    mutationFn: async () => {
+      await apiClient.post('/api/v1/absences', {
+        lessonIds: selectedLessonIds,
+        absences: [
+          {
+            studentId: student!.id,
+            status: AbsenceStatus.UNENTSCHULDIGT,
+            presentLessonCount: 0,
+            note: note.trim() || null,
+          },
+        ],
+      });
+    },
+    onSuccess: () => {
+      setFeedback({
+        tone: 'ok',
+        text: `Absenz für ${student?.firstName} ${student?.lastName} erfasst (${selectedLessonIds.length} Lektion${selectedLessonIds.length === 1 ? '' : 'en'}). Sie erscheint unten als unentschuldigt.`,
+      });
+      reset();
+      onCreated();
+    },
+    onError: (err) => setFeedback({ tone: 'err', text: errorText(err, 'Erfassen fehlgeschlagen.') }),
+  });
+
+  return (
+    <div className="bg-white rounded-xl border border-neutral-200 p-5 mb-6 space-y-4">
+      <h2 className="font-semibold text-neutral-900">Absenz erfassen</h2>
+
+      {/* Schritt 1: Schüler suchen */}
+      {!student ? (
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">Schüler/in suchen</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Name oder E-Mail eingeben (min. 2 Zeichen)..."
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
+            />
+          </div>
+          {query.length >= 2 && (
+            <ul className="mt-2 border border-neutral-200 rounded-lg divide-y divide-neutral-100 overflow-hidden">
+              {(results ?? []).map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStudent(s);
+                      setDeselected(new Set());
+                      setFeedback(null);
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-neutral-50"
+                  >
+                    <span className="font-medium text-neutral-900">
+                      {s.lastName}, {s.firstName}
+                    </span>
+                    <span className="text-neutral-500">{s.class?.name ?? '–'}</span>
+                  </button>
+                </li>
+              ))}
+              {results && results.length === 0 && (
+                <li className="px-4 py-2.5 text-sm text-neutral-400">Keine Schüler gefunden.</li>
+              )}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Schritt 2: Schüler gewählt → Datum + Lektionen */}
+          <div className="flex items-center justify-between gap-3 bg-neutral-50 rounded-lg px-4 py-2.5">
+            <p className="text-sm">
+              <span className="font-medium text-neutral-900">
+                {student.lastName}, {student.firstName}
+              </span>{' '}
+              <span className="text-neutral-500">· Klasse {student.class?.name ?? '–'}</span>
+            </p>
+            <button
+              type="button"
+              onClick={reset}
+              className="p-1.5 rounded-lg text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
+              title="Anderen Schüler wählen"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">Datum</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setDate(e.target.value);
+                    setDeselected(new Set());
+                  }
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">Notiz (optional)</label>
+              <input
+                type="text"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="z. B. krank gemeldet"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Lektionen an diesem Tag
+            </label>
+            {(lessons ?? []).length === 0 ? (
+              <p className="text-sm text-amber-600">
+                Keine Lektionen für die Klasse {student.class?.name ?? ''} an diesem Datum.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {(lessons ?? []).map((l) => {
+                  const active = !deselected.has(l.id);
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => toggleLesson(l.id)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                        active
+                          ? 'bg-brand-red-light border-brand-red text-brand-red'
+                          : 'bg-white border-neutral-300 text-neutral-500'
+                      }`}
+                    >
+                      {l.subject?.name ?? 'Lektion'} · {l.startTime}–{l.endTime}
+                      {l.isTest ? ' · TEST' : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => recordMutation.mutate()}
+            disabled={recordMutation.isPending || selectedLessonIds.length === 0}
+            className="flex items-center gap-2 bg-brand-red hover:bg-brand-red-dark text-white font-medium py-2 px-4 rounded-lg text-sm disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" />
+            {recordMutation.isPending
+              ? 'Erfassen...'
+              : `Als abwesend erfassen (${selectedLessonIds.length} Lektion${selectedLessonIds.length === 1 ? '' : 'en'})`}
+          </button>
+        </>
+      )}
+
+      {feedback && (
+        <p className={`text-sm ${feedback.tone === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+          {feedback.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function AbsenceExcusePage() {
   const queryClient = useQueryClient();
   const [filterClassId, setFilterClassId] = useState<string | null>(null);
+  const [showRecord, setShowRecord] = useState(false);
+  const [search, setSearch] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['absences-unexcused'],
@@ -238,20 +477,59 @@ export default function AbsenceExcusePage() {
     [classes]
   );
 
-  const visibleGroups = filterClassId
+  const classFiltered = filterClassId
     ? groups.filter((g) => g.classId === filterClassId)
     : groups;
+
+  // Suchleiste: offene Absenzen nach Schülername filtern
+  const searchQuery = search.trim().toLowerCase();
+  const visibleGroups = searchQuery
+    ? classFiltered
+        .map((g) => ({
+          ...g,
+          absences: g.absences.filter((a) =>
+            `${a.student?.firstName ?? ''} ${a.student?.lastName ?? ''}`
+              .toLowerCase()
+              .includes(searchQuery)
+          ),
+        }))
+        .filter((g) => g.absences.length > 0)
+    : classFiltered;
 
   const totalOpen = data?.length ?? 0;
   const testCount = data?.filter((a) => a.lesson?.isTest).length ?? 0;
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="page-title">Absenzen entschuldigen</h1>
-      <p className="page-desc mb-4">
-        Nach Klasse sortiert · {totalOpen} offen
-        {testCount > 0 && ` · ${testCount} an Test-Tagen (Arztzeugnis erforderlich)`}
-      </p>
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h1 className="page-title">Absenzen verwalten</h1>
+          <p className="page-desc">
+            Nach Klasse sortiert · {totalOpen} offen
+            {testCount > 0 && ` · ${testCount} an Test-Tagen (Arztzeugnis erforderlich)`}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowRecord((v) => !v)}
+          className="flex items-center gap-2 bg-brand-red hover:bg-brand-red-dark text-white font-medium py-2 px-4 rounded-lg text-sm whitespace-nowrap"
+        >
+          <Plus className="w-4 h-4" />
+          Absenz erfassen
+        </button>
+      </div>
+
+      {showRecord && <RecordAbsenceForm onCreated={invalidate} />}
+
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+        <input
+          type="text"
+          placeholder="Schüler in offenen Absenzen suchen..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
+        />
+      </div>
 
       {sortedClasses.length > 0 && (
         <div className="mb-6">
@@ -303,6 +581,13 @@ export default function AbsenceExcusePage() {
         <div className="bg-white rounded-xl border border-neutral-200 p-8 text-center">
           <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-2" />
           <p className="text-neutral-500">Keine offenen Absenzen zur Entschuldigung.</p>
+        </div>
+      )}
+
+      {!isLoading && totalOpen > 0 && searchQuery && visibleGroups.length === 0 && (
+        <div className="bg-white rounded-xl border border-neutral-200 p-8 text-center">
+          <Search className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
+          <p className="text-neutral-500">Keine offenen Absenzen zu "{search.trim()}" gefunden.</p>
         </div>
       )}
 

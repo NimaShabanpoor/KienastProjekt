@@ -196,7 +196,7 @@ export default function TimetablePage() {
   }, [classes, classId]);
 
   useEffect(() => {
-    const next = classId ? { classId } : {};
+    const next: Record<string, string> = classId ? { classId } : {};
     const current = searchParams.get('classId') ?? '';
     if (current === classId) return;
     setSearchParams(next, { replace: true });
