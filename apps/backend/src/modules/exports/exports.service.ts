@@ -388,7 +388,6 @@ export async function exportTimetablePdf(
     const GRID = '#444444';
     const HEADER_BG = '#333333';
     const TIME_BG = '#E8E8E8';
-    const LESSON_BG = '#F2F2F2';
     const EMPTY_BG = '#FFFFFF';
     const BREAK_BG = '#D0D0D0';
     const ALT_ROW = '#F5F5F5';

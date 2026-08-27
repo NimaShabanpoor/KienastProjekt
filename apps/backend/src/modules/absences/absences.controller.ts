@@ -20,6 +20,7 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
       studentId: req.query['studentId'] as string | undefined,
       status: statusParam as AbsenceStatus | undefined,
       classId: req.query['classId'] as string | undefined,
+      unreviewed: req.query['unreviewed'] === 'true',
       requestingUserId: req.user!.id,
       requestingUserRole: req.user!.role,
     });

@@ -86,6 +86,7 @@ export interface Absence {
   lessonId: string;
   status: AbsenceStatus;
   note: string | null;
+  reviewedAt: string | null;
   hasMedicalCertificate: boolean | null;
   medicalCertificatePath: string | null;
   medicalCertificateFileName: string | null;

@@ -200,7 +200,7 @@ export default function AppShell() {
     queryKey: ['unexcused-absence-count'],
     queryFn: async () => {
       const { data } = await apiClient.get<{ data: Absence[] }>(
-        `/api/v1/absences?status=${AbsenceStatus.UNENTSCHULDIGT}`
+        `/api/v1/absences?status=${AbsenceStatus.UNENTSCHULDIGT}&unreviewed=true`
       );
       return data.data.length;
     },

@@ -188,6 +188,8 @@ export async function createAbsenceBatch(
             status: statusForLesson,
             note: entry.note ?? null,
             recordedById,
+            // Neu-Erfassung setzt den Leiter-Entscheid zurück
+            reviewedAt: null,
           },
           include: { student: { select: { firstName: true, lastName: true } } },
         })
@@ -230,9 +232,11 @@ export async function updateAbsence(
 
   validateTestExcuse(absence, status);
 
+  // Leiter-Entscheid festhalten: ENTSCHULDIGT = genehmigt,
+  // UNENTSCHULDIGT = abgelehnt (bleibt unentschuldigt, gilt aber als geprüft)
   return prisma.absence.update({
     where: { id },
-    data: { status, note: note ?? null },
+    data: { status, note: note ?? null, reviewedAt: new Date() },
   });
 }
 
@@ -318,10 +322,11 @@ export async function listAbsences(params: {
   studentId?: string;
   status?: AbsenceStatus;
   classId?: string;
+  unreviewed?: boolean;
   requestingUserId: string;
   requestingUserRole: Role;
 }) {
-  const { lessonId, studentId, status, classId, requestingUserId, requestingUserRole } = params;
+  const { lessonId, studentId, status, classId, unreviewed, requestingUserId, requestingUserRole } = params;
 
   // Lehrperson: nur Absenzen aus den eigenen (unterrichteten/zugewiesenen) Klassen.
   // Expliziter classId-Filter wird mit der Beschränkung verschnitten (keine Spread-Kollision).
@@ -342,6 +347,7 @@ export async function listAbsences(params: {
       ...(lessonId && { lessonId }),
       ...(studentId && { studentId }),
       ...(status && { status }),
+      ...(unreviewed ? { reviewedAt: null } : {}),
       ...(studentClassFilter && { student: studentClassFilter }),
     },
     include: {

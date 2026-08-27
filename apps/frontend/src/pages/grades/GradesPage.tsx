@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import type { Grade, Student, GradeCategory } from '@schuladmin/shared';
 import { usePermissions } from '../../hooks/usePermissions';
-import { GraduationCap, Lock, Plus } from 'lucide-react';
+import { GraduationCap, Lock, Plus, Search } from 'lucide-react';
 
 interface TeacherSubject {
   id: string;
@@ -73,6 +73,8 @@ export default function GradesPage() {
     });
   }, [students]);
 
+  const [gradeSearch, setGradeSearch] = useState('');
+
   const { data: grades, isLoading } = useQuery({
     queryKey: ['grades', isTeacher ? 'mine' : 'all'],
     queryFn: async () => {
@@ -125,6 +127,16 @@ export default function GradesPage() {
       setReason('');
     },
   });
+
+  // Schüler-Suche: Notenliste nach Name filtern
+  const gradeQuery = gradeSearch.trim().toLowerCase();
+  const filteredGrades = gradeQuery
+    ? (grades ?? []).filter((g) =>
+        `${g.student?.firstName ?? ''} ${g.student?.lastName ?? ''}`
+          .toLowerCase()
+          .includes(gradeQuery)
+      )
+    : grades ?? [];
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -335,6 +347,17 @@ export default function GradesPage() {
         </form>
       )}
 
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+        <input
+          type="text"
+          placeholder="Schüler suchen..."
+          value={gradeSearch}
+          onChange={(e) => setGradeSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
+        />
+      </div>
+
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading && <div className="p-8 text-center text-neutral-400">Laden...</div>}
         {!isLoading && !grades?.length && (
@@ -343,7 +366,13 @@ export default function GradesPage() {
             <p className="text-neutral-400">Noch keine Noten vorhanden.</p>
           </div>
         )}
-        {grades?.map((grade) => (
+        {!isLoading && (grades?.length ?? 0) > 0 && filteredGrades.length === 0 && (
+          <div className="p-8 text-center">
+            <Search className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
+            <p className="text-neutral-400">Keine Noten zu "{gradeSearch.trim()}" gefunden.</p>
+          </div>
+        )}
+        {filteredGrades.map((grade) => (
           <div
             key={grade.id}
             className="flex items-center justify-between p-4 border-b border-neutral-100 last:border-0 gap-3"

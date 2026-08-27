@@ -109,7 +109,7 @@ export default function DashboardPage() {
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-brand-red">Übersicht</p>
         <h1 className="page-title mt-1">
-          Guten Tag, {user?.firstName}
+          Guten Tag
         </h1>
         <p className="page-desc">
           {roleLabel} · IT Bénédict Zürich

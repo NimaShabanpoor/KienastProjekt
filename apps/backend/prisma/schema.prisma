@@ -301,6 +301,7 @@ model Absence {
   lessonId     String
   status       AbsenceStatus @default(UNENTSCHULDIGT)
   note         String?
+  reviewedAt   DateTime?     // Leiter-Entscheid (genehmigt/abgelehnt); null = offen
   hasMedicalCertificate      Boolean?  // Arztzeugnis vorhanden? (Pflicht bei Test-Tagen)
   medicalCertificatePath     String?   // Gespeicherter Scan
   medicalCertificateFileName String?   // Original-Dateiname
