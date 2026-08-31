@@ -27,14 +27,24 @@ export async function listUsers(params: {
   limit: number;
   role?: Role;
   isActive?: boolean;
+  search?: string;
 }) {
-  const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, role, isActive } = params;
+  const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, role, isActive, search } = params;
   const skip = (page - 1) * limit;
 
   // Deaktivieren ≠ Löschen: inaktive Benutzer bleiben in der Liste sichtbar
   const where = {
     ...(role !== undefined && { role }),
     ...(isActive !== undefined ? { isActive } : {}),
+    ...(search
+      ? {
+          OR: [
+            { firstName: { contains: search } },
+            { lastName: { contains: search } },
+            { email: { contains: search } },
+          ],
+        }
+      : {}),
   };
 
   const [users, total] = await Promise.all([

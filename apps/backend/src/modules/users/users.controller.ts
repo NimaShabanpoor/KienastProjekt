@@ -17,7 +17,8 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
     const isActive = req.query['isActive'] !== undefined
       ? req.query['isActive'] === 'true'
       : undefined;
-    const result = await usersService.listUsers({ page, limit, role, isActive });
+    const search = (req.query['search'] as string | undefined)?.trim() || undefined;
+    const result = await usersService.listUsers({ page, limit, role, isActive, search });
     res.json({ data: result.users, meta: { page: result.page, limit: result.limit, total: result.total, totalPages: result.totalPages } });
   } catch (err) { next(err); }
 };

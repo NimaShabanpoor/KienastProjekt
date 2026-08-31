@@ -8,7 +8,7 @@ import { apiClient } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 import type { User } from '@schuladmin/shared';
 import { Role, ROLE_LABELS } from '@schuladmin/shared';
-import { UserCog, UserPlus } from 'lucide-react';
+import { Search, UserCog, UserPlus } from 'lucide-react';
 
 type StatusFilter = 'active' | 'inactive' | 'all';
 
@@ -17,6 +17,7 @@ export default function UsersPage() {
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [search, setSearch] = useState('');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -24,11 +25,12 @@ export default function UsersPage() {
   const [password, setPassword] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['users', statusFilter],
+    queryKey: ['users', statusFilter, search],
     queryFn: async () => {
       const params = new URLSearchParams({ limit: '100' });
       if (statusFilter === 'active') params.set('isActive', 'true');
       if (statusFilter === 'inactive') params.set('isActive', 'false');
+      if (search.trim()) params.set('search', search.trim());
       const { data } = await apiClient.get<{ data: User[] }>(`/api/v1/users?${params}`);
       return data.data;
     },
@@ -100,7 +102,17 @@ export default function UsersPage() {
         </form>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <input
+            type="text"
+            placeholder="Benutzer suchen (Name oder E-Mail)..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
+          />
+        </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
@@ -110,10 +122,8 @@ export default function UsersPage() {
           <option value="active">Nur aktive</option>
           <option value="inactive">Nur inaktive</option>
         </select>
-        {toggleError && (
-          <p className="text-sm text-red-600">{toggleError}</p>
-        )}
       </div>
+      {toggleError && <p className="mb-3 text-sm text-red-600">{toggleError}</p>}
 
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading && <div className="p-8 text-center text-neutral-400">Laden...</div>}
