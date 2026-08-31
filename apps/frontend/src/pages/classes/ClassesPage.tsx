@@ -31,16 +31,16 @@ function ClassStudentsSection({ cls }: { cls: Class }) {
     },
   });
 
-  const query = studentSearch.trim();
-  const { data: results } = useQuery({
-    queryKey: ['student-search', query],
+  // Alle aktiven Schüler laden – die Liste ist immer sichtbar,
+  // die Suche filtert sie nur (falls man den Namen nicht kennt, kann man stöbern)
+  const { data: allStudents } = useQuery({
+    queryKey: ['students', 'all-active'],
     queryFn: async () => {
       const { data } = await apiClient.get<{ data: Student[] }>(
-        `/api/v1/students?search=${encodeURIComponent(query)}&isActive=true&limit=20`
+        '/api/v1/students?isActive=true&limit=100'
       );
       return data.data;
     },
-    enabled: query.length >= 2,
   });
 
   const addMutation = useMutation({
@@ -49,20 +49,33 @@ function ClassStudentsSection({ cls }: { cls: Class }) {
       return student;
     },
     onSuccess: (student) => {
+      const from = student.class?.name;
       setFeedback({
         tone: 'ok',
-        text: `${student.firstName} ${student.lastName} wurde in die Klasse ${cls.name} aufgenommen.`,
+        text: from
+          ? `${student.firstName} ${student.lastName} wurde von ${from} nach ${cls.name} verschoben.`
+          : `${student.firstName} ${student.lastName} wurde in die Klasse ${cls.name} aufgenommen.`,
       });
       void queryClient.invalidateQueries({ queryKey: ['class-students', cls.id] });
       void queryClient.invalidateQueries({ queryKey: ['classes'] });
       void queryClient.invalidateQueries({ queryKey: ['students'] });
-      void queryClient.invalidateQueries({ queryKey: ['student-search'] });
     },
-    onError: (err) => setFeedback({ tone: 'err', text: errorText(err, 'Hinzufügen fehlgeschlagen.') }),
+    onError: (err) => setFeedback({ tone: 'err', text: errorText(err, 'Zuweisen fehlgeschlagen.') }),
   });
 
   const inClassIds = new Set((classStudents ?? []).map((s) => s.id));
-  const candidates = (results ?? []).filter((s) => !inClassIds.has(s.id));
+  const query = studentSearch.trim().toLowerCase();
+  const candidates = (allStudents ?? [])
+    .filter((s) => !inClassIds.has(s.id))
+    .filter((s) =>
+      query
+        ? `${s.firstName} ${s.lastName} ${s.email ?? ''}`.toLowerCase().includes(query)
+        : true
+    )
+    .sort((a, b) => {
+      const byLast = a.lastName.localeCompare(b.lastName, 'de');
+      return byLast !== 0 ? byLast : a.firstName.localeCompare(b.firstName, 'de');
+    });
 
   return (
     <div className="border-t border-neutral-100 pt-4 mt-4 space-y-3">
@@ -84,49 +97,54 @@ function ClassStudentsSection({ cls }: { cls: Class }) {
       )}
 
       <div>
-        <label className="block text-sm font-medium text-neutral-700 mb-2">
-          Schüler suchen und hinzufügen
+        <label className="block text-sm font-medium text-neutral-700 mb-1">
+          Schüler zur Klasse hinzufügen
         </label>
+        <p className="text-xs text-neutral-400 mb-2">
+          Ein Schüler kann nur einer Klasse zugewiesen sein – beim Hinzufügen wird er aus seiner
+          bisherigen Klasse verschoben.
+        </p>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
             type="text"
-            placeholder="Name oder E-Mail (min. 2 Zeichen)..."
+            placeholder="Liste filtern (Name oder E-Mail)..."
             value={studentSearch}
             onChange={(e) => setStudentSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
           />
         </div>
-        {query.length >= 2 && (
-          <ul className="mt-2 border border-neutral-200 rounded-lg divide-y divide-neutral-100 overflow-hidden">
-            {candidates.map((s) => (
-              <li key={s.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span>
-                  <span className="font-medium text-neutral-900">
-                    {s.lastName}, {s.firstName}
-                  </span>{' '}
-                  <span className="text-neutral-500">· aktuell {s.class?.name ?? 'ohne Klasse'}</span>
+        <ul className="mt-2 border border-neutral-200 rounded-lg divide-y divide-neutral-100 overflow-hidden max-h-64 overflow-y-auto">
+          {candidates.map((s) => (
+            <li key={s.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+              <span>
+                <span className="font-medium text-neutral-900">
+                  {s.lastName}, {s.firstName}
+                </span>{' '}
+                <span className="text-neutral-500">
+                  · aktuell {s.class?.name ?? 'ohne Klasse'}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => addMutation.mutate(s)}
-                  disabled={addMutation.isPending}
-                  className="flex items-center gap-1.5 text-xs font-medium bg-brand-red text-white px-3 py-1.5 rounded-lg hover:bg-brand-red-dark disabled:opacity-50"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Hinzufügen
-                </button>
-              </li>
-            ))}
-            {results && candidates.length === 0 && (
-              <li className="px-4 py-2.5 text-sm text-neutral-400">
-                {results.length > 0
-                  ? 'Alle Treffer sind bereits in dieser Klasse.'
-                  : 'Keine Schüler gefunden.'}
-              </li>
-            )}
-          </ul>
-        )}
+              </span>
+              <button
+                type="button"
+                onClick={() => addMutation.mutate(s)}
+                disabled={addMutation.isPending}
+                className="flex items-center gap-1.5 text-xs font-medium bg-brand-red text-white px-3 py-1.5 rounded-lg hover:bg-brand-red-dark disabled:opacity-50 shrink-0"
+                title={s.class?.name ? `Von ${s.class.name} hierher verschieben` : 'Zur Klasse hinzufügen'}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                {s.class?.name ? 'Verschieben' : 'Hinzufügen'}
+              </button>
+            </li>
+          ))}
+          {allStudents && candidates.length === 0 && (
+            <li className="px-4 py-2.5 text-sm text-neutral-400">
+              {query
+                ? 'Keine Schüler zu dieser Suche gefunden.'
+                : 'Alle Schüler sind bereits in dieser Klasse.'}
+            </li>
+          )}
+        </ul>
       </div>
 
       {feedback && (
