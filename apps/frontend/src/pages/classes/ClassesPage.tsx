@@ -23,6 +23,12 @@ function ClassStudentsSection({ cls }: { cls: Class }) {
   const [studentSearch, setStudentSearch] = useState('');
   const [feedback, setFeedback] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
 
+  // Schnell-Erstellung: Neuen Schüler direkt in diese Klasse anlegen
+  const [showNewStudent, setShowNewStudent] = useState(false);
+  const [nsFirst, setNsFirst] = useState('');
+  const [nsLast, setNsLast] = useState('');
+  const [nsEmail, setNsEmail] = useState('');
+
   const { data: classStudents } = useQuery({
     queryKey: ['class-students', cls.id],
     queryFn: async () => {
@@ -63,6 +69,33 @@ function ClassStudentsSection({ cls }: { cls: Class }) {
     onError: (err) => setFeedback({ tone: 'err', text: errorText(err, 'Zuweisen fehlgeschlagen.') }),
   });
 
+  const createStudentMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post<{ data: Student }>('/api/v1/students', {
+        firstName: nsFirst.trim(),
+        lastName: nsLast.trim(),
+        email: nsEmail.trim() || null,
+        classId: cls.id,
+      });
+      return data.data;
+    },
+    onSuccess: (created) => {
+      setFeedback({
+        tone: 'ok',
+        text: `${created.firstName} ${created.lastName} wurde angelegt und der Klasse ${cls.name} zugewiesen.`,
+      });
+      setShowNewStudent(false);
+      setNsFirst('');
+      setNsLast('');
+      setNsEmail('');
+      void queryClient.invalidateQueries({ queryKey: ['class-students', cls.id] });
+      void queryClient.invalidateQueries({ queryKey: ['classes'] });
+      void queryClient.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (err) =>
+      setFeedback({ tone: 'err', text: errorText(err, 'Schüler konnte nicht angelegt werden.') }),
+  });
+
   const inClassIds = new Set((classStudents ?? []).map((s) => s.id));
   const query = studentSearch.trim().toLowerCase();
   const candidates = (allStudents ?? [])
@@ -96,9 +129,63 @@ function ClassStudentsSection({ cls }: { cls: Class }) {
         </div>
       )}
 
+      {/* Schnell-Erstellung: Neuer Schüler direkt in diese Klasse */}
+      <div className="rounded-lg bg-neutral-50 border border-neutral-200 p-3 space-y-3">
+        <button
+          type="button"
+          onClick={() => setShowNewStudent((v) => !v)}
+          className="flex items-center gap-1.5 text-sm font-medium text-brand-red hover:underline"
+        >
+          <UserPlus className="w-4 h-4" />
+          {showNewStudent ? 'Schüler anlegen ausblenden' : 'Neuen Schüler anlegen'}
+        </button>
+        {showNewStudent && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                placeholder="Vorname"
+                value={nsFirst}
+                onChange={(e) => setNsFirst(e.target.value)}
+                className="px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white"
+              />
+              <input
+                placeholder="Nachname"
+                value={nsLast}
+                onChange={(e) => setNsLast(e.target.value)}
+                className="px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white"
+              />
+              <input
+                type="email"
+                placeholder="E-Mail (optional)"
+                value={nsEmail}
+                onChange={(e) => setNsEmail(e.target.value)}
+                className="px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setFeedback(null);
+                if (!nsFirst.trim() || !nsLast.trim()) {
+                  setFeedback({ tone: 'err', text: 'Bitte Vorname und Nachname ausfüllen.' });
+                  return;
+                }
+                createStudentMutation.mutate();
+              }}
+              disabled={createStudentMutation.isPending}
+              className="bg-neutral-800 text-white px-3 py-2 rounded-lg text-sm disabled:opacity-50"
+            >
+              {createStudentMutation.isPending
+                ? 'Anlegen...'
+                : `Schüler anlegen und ${cls.name} zuweisen`}
+            </button>
+          </>
+        )}
+      </div>
+
       <div>
         <label className="block text-sm font-medium text-neutral-700 mb-1">
-          Schüler zur Klasse hinzufügen
+          Bestehenden Schüler zur Klasse hinzufügen
         </label>
         <p className="text-xs text-neutral-400 mb-2">
           Ein Schüler kann nur einer Klasse zugewiesen sein – beim Hinzufügen wird er aus seiner
