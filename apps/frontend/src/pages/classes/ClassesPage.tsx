@@ -168,6 +168,14 @@ export default function ClassesPage() {
   const [homeroomTeacherId, setHomeroomTeacherId] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Schnell-Erstellung: Neue Lehrperson direkt im Panel
+  const [showNewTeacher, setShowNewTeacher] = useState(false);
+  const [ntFirst, setNtFirst] = useState('');
+  const [ntLast, setNtLast] = useState('');
+  const [ntEmail, setNtEmail] = useState('');
+  const [ntPassword, setNtPassword] = useState('');
+  const [ntFeedback, setNtFeedback] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['classes'],
     queryFn: async () => {
@@ -255,6 +263,37 @@ export default function ClassesPage() {
     },
   });
 
+  // Neue Lehrperson anlegen, ohne die Seite zu verlassen –
+  // wird danach direkt als Klassenlehrer vorausgewählt
+  const createTeacherMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post<{ data: User }>('/api/v1/users', {
+        email: ntEmail.trim(),
+        firstName: ntFirst.trim(),
+        lastName: ntLast.trim(),
+        role: Role.LEHRPERSON,
+        password: ntPassword,
+      });
+      return data.data;
+    },
+    onSuccess: (created) => {
+      void queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      void queryClient.invalidateQueries({ queryKey: ['users'] });
+      setHomeroomTeacherId(created.id);
+      setNtFeedback({
+        tone: 'ok',
+        text: `${created.firstName} ${created.lastName} wurde angelegt und als Klassenlehrer ausgewählt.`,
+      });
+      setShowNewTeacher(false);
+      setNtFirst('');
+      setNtLast('');
+      setNtEmail('');
+      setNtPassword('');
+    },
+    onError: (err) =>
+      setNtFeedback({ tone: 'err', text: errorText(err, 'Lehrperson konnte nicht angelegt werden.') }),
+  });
+
   const isEdit = editClass !== null;
   const panelOpen = showForm || isEdit;
 
@@ -329,6 +368,75 @@ export default function ClassesPage() {
               ))}
             </select>
           </div>
+
+          {/* Schnell-Erstellung: Lehrperson anlegen ohne Seitenwechsel */}
+          <div className="rounded-lg bg-neutral-50 border border-neutral-200 p-3 space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowNewTeacher((v) => !v)}
+              className="flex items-center gap-1.5 text-sm font-medium text-brand-red hover:underline"
+            >
+              <Plus className="w-4 h-4" />
+              {showNewTeacher ? 'Lehrperson anlegen ausblenden' : 'Neue Lehrperson anlegen'}
+            </button>
+            {showNewTeacher && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    placeholder="Vorname"
+                    value={ntFirst}
+                    onChange={(e) => setNtFirst(e.target.value)}
+                    className="px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white"
+                  />
+                  <input
+                    placeholder="Nachname"
+                    value={ntLast}
+                    onChange={(e) => setNtLast(e.target.value)}
+                    className="px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white"
+                  />
+                  <input
+                    type="email"
+                    placeholder="E-Mail"
+                    value={ntEmail}
+                    onChange={(e) => setNtEmail(e.target.value)}
+                    className="px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Passwort (min. 12 Zeichen)"
+                    value={ntPassword}
+                    onChange={(e) => setNtPassword(e.target.value)}
+                    className="px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNtFeedback(null);
+                    if (!ntFirst.trim() || !ntLast.trim() || !ntEmail.trim()) {
+                      setNtFeedback({ tone: 'err', text: 'Bitte Vorname, Nachname und E-Mail ausfüllen.' });
+                      return;
+                    }
+                    if (ntPassword.length < 12) {
+                      setNtFeedback({ tone: 'err', text: 'Das Passwort muss mindestens 12 Zeichen haben.' });
+                      return;
+                    }
+                    createTeacherMutation.mutate();
+                  }}
+                  disabled={createTeacherMutation.isPending}
+                  className="bg-neutral-800 text-white px-3 py-2 rounded-lg text-sm disabled:opacity-50"
+                >
+                  {createTeacherMutation.isPending ? 'Anlegen...' : 'Lehrperson anlegen'}
+                </button>
+              </>
+            )}
+            {ntFeedback && (
+              <p className={`text-sm ${ntFeedback.tone === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+                {ntFeedback.text}
+              </p>
+            )}
+          </div>
+
           <button
             type="submit"
             disabled={createMutation.isPending || updateMutation.isPending}
